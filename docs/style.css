@@ -63,7 +63,6 @@ body {
   transition: border-color 0.15s, color 0.15s;
 }
 .login-btn:hover { border-color: var(--accent); }
-.login-btn.on { color: var(--accent); border-color: var(--accent-dim); }
 .theme-toggle {
   width: 38px;
   height: 38px;

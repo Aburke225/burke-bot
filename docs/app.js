@@ -257,7 +257,7 @@ function meClick() {
       busy = false
       input.disabled = false
       input.value = ""
-      input.placeholder = "nope - try again"
+      input.placeholder = "nope"
       input.focus()
     }
   })
