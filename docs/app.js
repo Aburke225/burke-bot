@@ -20,12 +20,16 @@ let chess = new Chess()
 let botColor = "w"
 let inBook = true
 let gameId = 0
+let styleModel = null
+let stdStart = true  // capture only games that began from the standard position
+const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/chess/game"
 
 // ---------- engine (single-threaded Stockfish 10, tuned to ~1200) ----------
 
 const engine = (() => {
   const worker = new Worker("vendor/stockfish/stockfish.js")
   let onBest = null
+  let lines = {}
   let readyResolve
   const ready = new Promise(res => { readyResolve = res })
   worker.onmessage = (e) => {
@@ -35,18 +39,35 @@ const engine = (() => {
       worker.postMessage("isready")
     } else if (line === "readyok") {
       readyResolve()
+    } else if (line.startsWith("info ") && line.includes(" multipv ")) {
+      const mpv = /\bmultipv (\d+)/.exec(line)
+      const pv = / pv ([a-h][1-8][a-h][1-8][qrbn]?)/.exec(line)
+      const cp = / score cp (-?\d+)/.exec(line)
+      const mate = / score mate (-?\d+)/.exec(line)
+      if (mpv && pv) {
+        const m = parseInt(mate ? mate[1] : "0", 10)
+        const score = cp ? parseInt(cp[1], 10) : mate ? (m > 0 ? 10000 - m : -10000 - m) : 0
+        lines[parseInt(mpv[1], 10)] = { uci: pv[1], cp: score }
+      }
     } else if (line.startsWith("bestmove") && onBest) {
       const uci = line.split(" ")[1]
       const resolve = onBest
       onBest = null
-      resolve(uci)
+      resolve({ uci, lines })
     }
   }
   worker.postMessage("uci")
   return {
     ready,
+    // with the style model in charge of humanness, search runs clean:
+    // full strength, five candidate lines for the model to choose among
+    useMultipv() {
+      worker.postMessage("setoption name Skill Level value 20")
+      worker.postMessage("setoption name MultiPV value 5")
+    },
     bestMove(fen) {
       return new Promise(res => {
+        lines = {}
         onBest = res
         worker.postMessage("position fen " + fen)
         worker.postMessage("go depth 8")
@@ -121,6 +142,81 @@ function checkNote() {
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 
+// ---------- the style model (behavioral cloning over engine candidates) ----------
+
+// feature order is a contract with pipeline/train_style.py - change both or neither
+function moveFeatures(uci, cpGapPawns, rank) {
+  const from = uci.slice(0, 2), to = uci.slice(2, 4)
+  const played = tryMove({ from, to, promotion: uci.slice(4) || undefined })
+  if (!played) return null
+  chess.undo()
+  const x = new Array(15).fill(0)
+  x[0] = 1
+  x[1] = Math.min(Math.max(cpGapPawns, 0), 5)
+  x[2] = rank / 4
+  x[3] = played.captured ? 1 : 0
+  x[4] = played.san.includes("+") || played.san.includes("#") ? 1 : 0
+  x[5] = played.promotion ? 1 : 0
+  x[6] = played.flags.includes("k") || played.flags.includes("q") ? 1 : 0
+  x[7 + "pnbrqk".indexOf(played.piece)] = 1
+  const tf = to.charCodeAt(0) - 97, tr = to.charCodeAt(1) - 49
+  x[13] = (Math.abs(tf - 3.5) + Math.abs(tr - 3.5)) / 7
+  const fr = from.charCodeAt(1) - 49
+  x[14] = (played.color === "w" ? tr > fr : tr < fr) ? 1 : 0
+  return x
+}
+
+// sample a move from the model's probabilities over the engine's candidates
+function stylePick(lines) {
+  if (!styleModel) return null
+  const cands = Object.keys(lines).sort((a, b) => a - b).map(k => lines[k])
+  if (cands.length < 2) return null
+  const best = cands[0].cp
+  const scored = []
+  for (let i = 0; i < cands.length; i++) {
+    const x = moveFeatures(cands[i].uci, (best - cands[i].cp) / 100, i)
+    if (!x) continue
+    scored.push({ uci: cands[i].uci, z: x.reduce((sum, v, j) => sum + v * styleModel.weights[j], 0) })
+  }
+  if (scored.length < 2) return null
+  const zmax = Math.max(...scored.map(c => c.z))
+  let total = 0
+  for (const c of scored) { c.p = Math.exp(c.z - zmax); total += c.p }
+  let r = Math.random() * total
+  for (const c of scored) {
+    r -= c.p
+    if (r <= 0) return c.uci
+  }
+  return scored[0].uci
+}
+
+// ---------- game capture (keyed - only games I flag as mine are stored) ----------
+
+function captureGame() {
+  let key = null
+  try { key = localStorage.getItem("bb-key") } catch (e) {}
+  const hist = chess.history({ verbose: true })
+  if (!key || !stdStart || hist.length < 6 || !chess.isGameOver()) return
+  let result = "d"
+  if (chess.isCheckmate()) result = chess.turn() === botColor ? "w" : "l"
+  const body = {
+    key,
+    id: (crypto.randomUUID && crypto.randomUUID()) || Date.now() + "-" + Math.random().toString(16).slice(2),
+    color: botColor === "w" ? "b" : "w",
+    result,
+    moves: hist.map(m => m.from + m.to + (m.promotion || "")),
+    ts: Date.now(),
+  }
+  window.bbCapture = body
+  try {
+    fetch(CAPTURE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => {})
+  } catch (e) {}
+}
+
 // ---------- game flow ----------
 
 async function botMove(board, id) {
@@ -138,12 +234,17 @@ async function botMove(board, id) {
   }
   if (!played) {
     await engine.ready
-    const uci = await engine.bestMove(chess.fen())
+    const result = await engine.bestMove(chess.fen())
     if (id !== gameId) return
     const elapsed = Date.now() - started
     if (elapsed < 500) await sleep(500 - elapsed)
     if (id !== gameId) return
+    const uci = (styleModel && stylePick(result.lines)) || result.uci
+    window.bbLast = { pick: uci, best: result.uci, lines: result.lines }
     played = tryMove({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4) || undefined })
+    if (!played && uci !== result.uci) {
+      played = tryMove({ from: result.uci.slice(0, 2), to: result.uci.slice(2, 4), promotion: result.uci.slice(4) || undefined })
+    }
     source = null
   }
   if (!played) { finish(); return }
@@ -170,6 +271,7 @@ async function botMove(board, id) {
 function finish() {
   setStatus("over", "game over", gameOverLine())
   boardRef.disableMoveInput()
+  captureGame()
 }
 
 function inputHandler(event) {
@@ -225,6 +327,7 @@ let boardRef
 
 function newGame(userColor) {
   gameId++
+  stdStart = true
   chess = new Chess()
   inBook = true
   botColor = userColor === "w" ? "b" : "w"
@@ -266,11 +369,26 @@ function renderStats(stats) {
 // ---------- boot ----------
 
 async function boot() {
-  const [bookRes, statsRes] = await Promise.all([
-    fetch("book.json"), fetch("stats.json"),
+  try {
+    const params = new URLSearchParams(location.search)
+    if (params.get("key")) {
+      localStorage.setItem("bb-key", params.get("key"))
+      history.replaceState(null, "", location.pathname)
+    }
+  } catch (e) {}
+  const [bookRes, statsRes, styleRes] = await Promise.all([
+    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=1").catch(() => null),
   ])
   book = await bookRes.json()
   const stats = await statsRes.json()
+  try {
+    if (styleRes && styleRes.ok) styleModel = await styleRes.json()
+  } catch (e) { styleModel = null }
+  if (styleModel && Array.isArray(styleModel.weights)) {
+    engine.ready.then(() => engine.useMultipv())
+  } else {
+    styleModel = null
+  }
   renderStats(stats)
 
   boardRef = new Chessboard(document.getElementById("board"), {
@@ -289,10 +407,24 @@ async function boot() {
   document.getElementById("new-black").addEventListener("click", () => newGame("b"))
   newGame("w")
 
-  // dev hook: load an arbitrary FEN (console-only, e.g. window.bb.load(fen, "w"))
+  // dev hooks (console-only): load a FEN, drive moves, inspect state
   window.bb = {
+    newGame,
+    turn: () => chess.turn(),
+    over: () => chess.isGameOver(),
+    legal: () => chess.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion || "")),
+    move(uci) {
+      const m = tryMove({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4) || undefined })
+      if (!m) return false
+      try { boardRef.disableMoveInput() } catch (e) {}
+      boardRef.setPosition(chess.fen(), false)
+      renderMoves()
+      botMove(boardRef, gameId)
+      return m.san
+    },
     load(fen, userColor = "w") {
       gameId++
+      stdStart = false
       chess = new Chess(fen)
       inBook = false
       botColor = userColor === "w" ? "b" : "w"

@@ -129,6 +129,7 @@ def main():
     seen_links = set()
     skipped = 0
     bot_games = []  # (opponent elo, my score) from the vs-computer exports
+    cache = []  # every ingested game as {color, moves:[uci]} for the style trainer
 
     for item, source in sources + manual:
         game = to_game(item, source)
@@ -168,6 +169,9 @@ def main():
         if date and date.replace(".", "-") > stats["last_game"]:
             stats["last_game"] = date.replace(".", "-")
 
+        cache.append({"color": "w" if color == chess.WHITE else "b",
+                      "moves": [m.uci() for m in game.mainline_moves()]})
+
         board = game.board()
         for ply, move in enumerate(game.mainline_moves()):
             if ply >= MAX_BOOK_PLY:
@@ -190,6 +194,44 @@ def main():
     stats["openings_black"] = stats["openings_black"].most_common(6)
     stats["book_positions"] = len(book)
 
+    # games played against the bot on the site (captured by the Worker; only
+    # Andrew's own, flagged games are ever stored — and only HIS side's moves
+    # go into the book, never the bot's replies)
+    stats["site_games"] = 0
+    site_path = os.path.join(REPO_ROOT, "pipeline", "site-games.json")
+    if os.path.exists(site_path):
+        with open(site_path) as f:
+            site_games = json.load(f)
+        for g in site_games:
+            color = chess.WHITE if g.get("color") == "w" else chess.BLACK
+            result = g.get("result")
+            moves = g.get("moves", [])
+            if result not in ("w", "l", "d") or len(moves) < 6:
+                continue
+            stats["games"] += 1
+            stats["site_games"] += 1
+            stats["as_white" if color == chess.WHITE else "as_black"] += 1
+            stats["wins" if result == "w" else "losses" if result == "l" else "draws"] += 1
+            cache.append({"color": g["color"], "moves": moves})
+            board = chess.Board()
+            for ply, uci in enumerate(moves):
+                try:
+                    move = chess.Move.from_uci(uci)
+                except ValueError:
+                    break
+                if move not in board.legal_moves:
+                    break
+                if ply < MAX_BOOK_PLY and board.turn == color:
+                    key = book_key(board)
+                    entry = book[key].get(uci)
+                    if entry is None:
+                        entry = {"san": board.san(move), "n": 0, "w": 0, "d": 0, "l": 0}
+                        book[key][uci] = entry
+                    entry["n"] += 1
+                    entry[result] += 1
+                board.push(move)
+        print(f"site games ingested: {stats['site_games']}")
+
     # performance rating vs the chess.com bots (their scale runs hotter than
     # human ratings, so this is quoted on the site as "bot scale")
     if bot_games:
@@ -206,6 +248,8 @@ def main():
         json.dump({k: book[k] for k in sorted(book)}, f, separators=(",", ":"), sort_keys=True)
     with open(os.path.join(WEB_DIR, "stats.json"), "w") as f:
         json.dump(stats, f, indent=2, sort_keys=True)
+    with open(os.path.join(REPO_ROOT, "pipeline", "games-cache.json"), "w") as f:
+        json.dump(cache, f, separators=(",", ":"))
 
     print(f"games used: {stats['games']} (skipped {skipped}), "
           f"book positions: {len(book)}, last game: {stats['last_game']}")

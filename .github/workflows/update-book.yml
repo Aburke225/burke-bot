@@ -19,15 +19,30 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install python-chess
+      - run: pip install python-chess numpy
+
+      - run: sudo apt-get install -y stockfish || (sudo apt-get update && sudo apt-get install -y stockfish)
+
+      - name: pull the games played on the site
+        env:
+          CHESS_KEY: ${{ secrets.CHESS_KEY }}
+        run: |
+          if [ -n "$CHESS_KEY" ]; then
+            curl -sf "https://prompt-yourself-bot.andrewburke225.workers.dev/chess/games?key=$CHESS_KEY" \
+              -o pipeline/site-games.json || rm -f pipeline/site-games.json
+          fi
 
       - run: python pipeline/build.py
+
+      - name: retrain the style model
+        run: python pipeline/train_style.py
 
       - name: commit and push if the book changed
         run: |
           git config user.name "Andrew Burke"
           git config user.email "aburke225@berkeley.edu"
-          git add docs/book.json docs/stats.json
+          git add docs/book.json docs/stats.json docs/style.json
+          if [ -f pipeline/site-games.json ]; then git add pipeline/site-games.json; fi
           if git diff --cached --quiet; then
             echo "no new games"
           else
