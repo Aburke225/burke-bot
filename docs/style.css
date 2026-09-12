@@ -58,7 +58,7 @@ body {
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--ink-2);
+  color: var(--ink);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
