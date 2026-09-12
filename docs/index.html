@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Burkeley Bot</title>
+  <title>Burke Bot</title>
+  <script>try{var t=localStorage.getItem('theme');if(t==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#9822;</text></svg>">
   <meta name="description" content="A chess bot built from every game Andrew Burke has ever played — it opens like him, attacks like him, and blunders like him.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,12 +13,13 @@
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <div class="wrap">
+    <button class="theme-toggle" aria-label="Switch to light mode"></button>
     <header class="top">
-      <h1 class="wordmark">burkeley bot<span class="gold">.</span></h1>
+      <h1 class="wordmark">Burke Bot</h1>
       <p class="tagline">A bot built from every chess game I've ever played. It opens like me, attacks like me, and blunders like me.</p>
     </header>
 
@@ -55,6 +57,33 @@
       &copy; 2026 <a href="https://aburke225.github.io">Andrew Burke</a> &middot; <a href="https://github.com/Aburke225/burkeley-bot">Source on GitHub</a> &middot; games from <a href="https://www.chess.com/member/Burkeley">chess.com/Burkeley</a>
     </footer>
   </div>
-  <script type="module" src="app.js?v=3"></script>
+  <script>
+    // light/dark toggle, same protocol as my other sites: dark by default,
+    // the override lives in localStorage. Sun while dark, moon while light.
+    (function () {
+      var root = document.documentElement;
+      var btn = document.querySelector('.theme-toggle');
+      var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+      var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+      function current() {
+        return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+      }
+      function render() {
+        var dark = current() === 'dark';
+        btn.innerHTML = dark ? SUN : MOON;
+        btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+        btn.title = dark ? 'Light mode' : 'Dark mode';
+      }
+      btn.addEventListener('click', function () {
+        var next = current() === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('theme', next); } catch (e) {}
+        if (next === 'light') root.setAttribute('data-theme', 'light');
+        else root.removeAttribute('data-theme');
+        render();
+      });
+      render();
+    })();
+  </script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>

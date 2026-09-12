@@ -1,19 +1,31 @@
-/* Burkeley Bot — Berkeley navy + gold, dark by design */
+/* Burke Bot — tournament green: the club vinyl board.
+   Dark by default; light theme via [data-theme="light"] (toggle, top right). */
 
 :root {
-  --bg: #0a1220;
-  --surface: #101c31;
-  --surface-2: #16243d;
-  --border: #22334f;
-  --ink: #eef2f8;
-  --ink-2: #9fb0c8;
-  --gold: #fdb515;
-  --gold-dim: #c98f0e;
-  --navy: #003262;
-  --sq-light: #e9dfc5;
-  --sq-dark: #33507c;
+  --bg: #0c120d;
+  --surface: #131c14;
+  --surface-2: #1a271b;
+  --border: #2a3d2c;
+  --ink: #edf1e4;
+  --ink-2: #a2b09e;
+  --accent: #8fc57f;
+  --accent-dim: #527a4b;
+  --sq-light: #e9ecd6;
+  --sq-dark: #527a4b;
   --good: #4ade80;
   --bad: #f87171;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f0f2e4;
+  --surface: #fafbf2;
+  --surface-2: #e7ecd8;
+  --border: #c6d1b2;
+  --ink: #1e2a1d;
+  --ink-2: #55684f;
+  --accent: #3f5e3a;
+  --accent-dim: #527a4b;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -28,7 +40,26 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 1060px; margin: 0 auto; padding: 2.2rem 1.2rem 3rem; }
+.wrap { max-width: 1060px; margin: 0 auto; padding: 2.2rem 1.2rem 3rem; position: relative; }
+
+.theme-toggle {
+  position: absolute;
+  top: 2rem;
+  right: 1.2rem;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s;
+}
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle:hover { border-color: var(--accent); }
 
 .top { margin-bottom: 1.8rem; }
 .wordmark {
@@ -38,7 +69,6 @@ body {
   margin: 0 0 0.4rem;
   letter-spacing: -0.02em;
 }
-.gold { color: var(--gold); }
 .tagline { color: var(--ink-2); margin: 0; max-width: 46rem; }
 
 .layout {
@@ -62,8 +92,8 @@ body {
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
-.btn:hover { border-color: var(--gold); background: var(--surface-2); transform: translateY(-1px); }
-.btn.active { border-color: var(--gold); color: var(--gold); }
+.btn:hover { border-color: var(--accent); background: var(--surface-2); transform: translateY(-1px); }
+.btn.active { border-color: var(--accent); color: var(--accent); }
 
 .panel { display: flex; flex-direction: column; gap: 1rem; }
 
@@ -89,10 +119,10 @@ body {
   background: var(--ink-2);
   flex: none;
 }
-.dot.book { background: var(--gold); box-shadow: 0 0 8px rgba(253, 181, 21, 0.6); }
+.dot.book { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 .dot.engine { background: #60a5fa; box-shadow: 0 0 8px rgba(96, 165, 250, 0.6); }
-.dot.over { background: var(--good); }
-.dot.thinking { background: var(--gold); animation: pulse 1s ease-in-out infinite; }
+.dot.over { background: var(--ink-2); }
+.dot.thinking { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 
 .status-line { margin: 0; font-size: 0.92rem; }
@@ -118,7 +148,7 @@ body {
 .stats-card dl { margin: 0; font-size: 0.85rem; }
 .stats-card dt { color: var(--ink-2); float: left; clear: left; margin-right: 0.6rem; }
 .stats-card dd { margin: 0 0 0.3rem 0; text-align: right; }
-.stats-card dd .g { color: var(--gold); }
+.stats-card dd .g { color: var(--accent); }
 
 footer {
   margin-top: 2.4rem;
@@ -127,8 +157,8 @@ footer {
   color: var(--ink-2);
   font-size: 0.82rem;
 }
-footer a { color: var(--ink); text-decoration-color: var(--gold-dim); }
-footer a:hover { color: var(--gold); }
+footer a { color: var(--ink); text-decoration-color: var(--accent-dim); }
+footer a:hover { color: var(--accent); }
 
 /* board colors — navy + parchment (selectors must match theme class "default") */
 .cm-chessboard.default .board .square.white { fill: var(--sq-light); }

@@ -13,6 +13,7 @@ import collections
 import glob
 import io
 import json
+import math
 import os
 import sys
 import urllib.request
@@ -127,6 +128,7 @@ def main():
 
     seen_links = set()
     skipped = 0
+    bot_games = []  # (opponent elo, my score) from the vs-computer exports
 
     for item, source in sources + manual:
         game = to_game(item, source)
@@ -148,6 +150,9 @@ def main():
         stats["games"] += 1
         if source == "manual":
             stats["manual_games"] += 1
+            opp_elo = game.headers.get("BlackElo" if color == chess.WHITE else "WhiteElo", "?")
+            if opp_elo.isdigit():
+                bot_games.append((int(opp_elo), {"w": 1.0, "d": 0.5, "l": 0.0}[result]))
         stats["as_white" if color == chess.WHITE else "as_black"] += 1
         stats["wins" if result == "w" else "losses" if result == "l" else "draws"] += 1
 
@@ -184,6 +189,17 @@ def main():
     stats["openings_white"] = stats["openings_white"].most_common(6)
     stats["openings_black"] = stats["openings_black"].most_common(6)
     stats["book_positions"] = len(book)
+
+    # performance rating vs the chess.com bots (their scale runs hotter than
+    # human ratings, so this is quoted on the site as "bot scale")
+    if bot_games:
+        n = len(bot_games)
+        avg = sum(e for e, _ in bot_games) / n
+        s = sum(sc for _, sc in bot_games) / n
+        s = min(max(s, 1 / (2 * n)), 1 - 1 / (2 * n))  # keep the log finite
+        stats["bot_scale_strength"] = int(round((avg - 400 * math.log10(1 / s - 1)) / 5) * 5)
+    else:
+        stats["bot_scale_strength"] = None
 
     # latest rapid rating straight from the profile
     try:

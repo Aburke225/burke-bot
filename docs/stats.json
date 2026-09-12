@@ -2,6 +2,7 @@
   "as_black": 180,
   "as_white": 165,
   "book_positions": 4145,
+  "bot_scale_strength": 1335,
   "draws": 13,
   "games": 345,
   "last_game": "2025-12-20",
