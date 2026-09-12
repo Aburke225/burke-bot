@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Burkeley opening book from chess.com games.
+"""Build the Burke Bot opening book from chess.com games.
 
 Fetches every monthly archive for the account, keeps rapid games against
 humans, merges any manually exported PGNs from manual-pgn/ (chess.com's
@@ -23,7 +23,7 @@ import chess.pgn
 
 USERNAME = "burkeley"
 API_BASE = f"https://api.chess.com/pub/player/{USERNAME}"
-USER_AGENT = "burkeley-bot build script (+https://aburke225.github.io)"
+USER_AGENT = "burke-bot build script (+https://aburke225.github.io)"
 MAX_BOOK_PLY = 30  # keep the book to the first 15 full moves
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB_DIR = os.path.join(REPO_ROOT, "docs")

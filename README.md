@@ -1,4 +1,4 @@
-# burkeley bot
+# Burke Bot
 
 A chess bot that plays like me — built from every game I've played on
 [chess.com/Burkeley](https://www.chess.com/member/Burkeley).

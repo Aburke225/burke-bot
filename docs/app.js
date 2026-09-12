@@ -1,4 +1,4 @@
-// Burkeley Bot — plays from Andrew's real games while the position is known,
+// Burke Bot — plays from Andrew's real games while the position is known,
 // then hands over to a strength-capped engine once we leave them.
 // Engine target: ~1200 human / ~1400 chess.com-bot scale, triangulated from
 // his official 1002, his self-assessed 1200, and an 11.7% score vs 1600-1800
