@@ -157,8 +157,7 @@ footer {
   color: var(--ink-2);
   font-size: 0.82rem;
 }
-footer a { color: var(--ink); text-decoration-color: var(--accent-dim); }
-footer a:hover { color: var(--accent); }
+footer a { color: var(--ink-2); }
 
 /* board colors — navy + parchment (selectors must match theme class "default") */
 .cm-chessboard.default .board .square.white { fill: var(--sq-light); }
