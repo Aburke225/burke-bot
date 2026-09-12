@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Train the style model: which of Stockfish's candidate moves would Andrew play?
 
-This is imitation learning (the specific method is behavioral cloning):
+This is imitation learning (the specific method is behavior cloning):
 every position from his games past the opening becomes a training example —
 Stockfish proposes its top 5 moves, and the label is the one he actually
 played. A conditional-logit model
