@@ -3,7 +3,7 @@
 A chess bot that plays like me — built from every game I've played on
 [chess.com/Burkeley](https://www.chess.com/member/Burkeley).
 
-**Play it:** https://aburke225.github.io/burkeley-bot/
+**Play it:** https://aburke225.github.io/burke-bot/
 
 ## How it works
 
