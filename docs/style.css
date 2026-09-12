@@ -2,12 +2,12 @@
    Dark by default; light theme via [data-theme="light"] (toggle, top right). */
 
 :root {
-  --bg: #0c120d;
-  --surface: #131c14;
-  --surface-2: #1a271b;
-  --border: #2a3d2c;
+  --bg: #162117;
+  --surface: #1e2b1f;
+  --surface-2: #26362a;
+  --border: #3a4f3c;
   --ink: #edf1e4;
-  --ink-2: #a2b09e;
+  --ink-2: #aab8a5;
   --accent: #8fc57f;
   --accent-dim: #527a4b;
   --sq-light: #e9ecd6;
@@ -159,7 +159,10 @@ footer {
 }
 footer a { color: var(--ink-2); }
 
-/* board colors — navy + parchment (selectors must match theme class "default") */
+/* light mode only: a dark edge so the board stands out on the pale page */
+:root[data-theme="light"] .board .cm-chessboard { outline: 2px solid #3a4a36; }
+
+/* board colors (selectors must match theme class "default") */
 .cm-chessboard.default .board .square.white { fill: var(--sq-light); }
 .cm-chessboard.default .board .square.black { fill: var(--sq-dark); }
 .cm-chessboard.default .coordinates .coordinate { fill: var(--ink-2); }
