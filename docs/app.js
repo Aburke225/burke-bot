@@ -252,7 +252,7 @@ function renderStats(stats) {
     ["games learned from", String(stats.games)],
     ["record", rec],
     ["rapid rating", stats.rating ? String(stats.rating) : "—"],
-    ["strength (bot scale)", stats.bot_scale_strength ? "~" + stats.bot_scale_strength : "—"],
+    ["strength", stats.bot_scale_strength ? "~" + stats.bot_scale_strength : "—"],
     ["book positions", stats.book_positions.toLocaleString("en-US")],
     ["favorite as White", stats.openings_white[0] ? stats.openings_white[0][0] : "—"],
     ["favorite as Black", stats.openings_black[0] ? stats.openings_black[0][0] : "—"],
@@ -262,7 +262,7 @@ function renderStats(stats) {
   for (const [k, v] of rows) {
     const dt = document.createElement("dt"); dt.textContent = k
     const dd = document.createElement("dd"); dd.textContent = v
-    if (k === "rapid rating" || k === "strength (bot scale)" || k.startsWith("favorite")) dd.className = "g"
+    if (k === "rapid rating" || k === "strength" || k.startsWith("favorite")) dd.className = "g"
     list.appendChild(dt); list.appendChild(dd)
   }
 }
