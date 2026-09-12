@@ -190,6 +190,70 @@ function stylePick(lines) {
   return scored[0].uci
 }
 
+// ---------- the "me" button: password sign-in for game capture ----------
+
+// "ok" | "bad" | "unknown" - unknown means the network failed, not the key
+async function keyStatus(key) {
+  try {
+    const r = await fetch(CAPTURE_URL.replace("/game", "/games") + "?key=" + encodeURIComponent(key))
+    return r.ok ? "ok" : "bad"
+  } catch (e) {
+    return "unknown"
+  }
+}
+
+function renderMe() {
+  const btn = document.getElementById("bb-me")
+  if (!btn) return
+  let has = false
+  try { has = !!localStorage.getItem("bb-key") } catch (e) {}
+  btn.classList.toggle("on", has)
+  btn.textContent = has ? "me \u2713" : "me"
+  btn.title = has
+    ? "signed in - finished games train the bot. Click to sign out."
+    : "Andrew's sign-in for game capture"
+}
+
+function meClick() {
+  const btn = document.getElementById("bb-me")
+  let existing = null
+  try { existing = localStorage.getItem("bb-key") } catch (e) {}
+  if (existing) {
+    try { localStorage.removeItem("bb-key") } catch (e) {}
+    renderMe()
+    return
+  }
+  const input = document.createElement("input")
+  input.type = "password"
+  input.className = "bb-me-input"
+  input.placeholder = "password"
+  input.autocomplete = "off"
+  btn.replaceWith(input)
+  input.focus()
+  let busy = false
+  const done = () => { input.replaceWith(btn); renderMe() }
+  input.addEventListener("keydown", async (e) => {
+    if (e.key === "Escape") { done(); return }
+    if (e.key !== "Enter" || busy) return
+    const pw = input.value.trim()
+    if (!pw) { done(); return }
+    busy = true
+    input.disabled = true
+    const ok = (await keyStatus(pw)) === "ok"
+    if (ok) {
+      try { localStorage.setItem("bb-key", pw) } catch (err) {}
+      done()
+    } else {
+      busy = false
+      input.disabled = false
+      input.value = ""
+      input.placeholder = "nope - try again"
+      input.focus()
+    }
+  })
+  input.addEventListener("blur", () => { if (!busy) done() })
+}
+
 // ---------- game capture (keyed - only games I flag as mine are stored) ----------
 
 function captureGame() {
@@ -369,13 +433,6 @@ function renderStats(stats) {
 // ---------- boot ----------
 
 async function boot() {
-  try {
-    const params = new URLSearchParams(location.search)
-    if (params.get("key")) {
-      localStorage.setItem("bb-key", params.get("key"))
-      history.replaceState(null, "", location.pathname)
-    }
-  } catch (e) {}
   const [bookRes, statsRes, styleRes] = await Promise.all([
     fetch("book.json"), fetch("stats.json"), fetch("style.json?v=1").catch(() => null),
   ])
@@ -390,6 +447,18 @@ async function boot() {
     styleModel = null
   }
   renderStats(stats)
+
+  const meBtn = document.getElementById("bb-me")
+  if (meBtn) meBtn.addEventListener("click", meClick)
+  renderMe()
+  try {
+    const stored = localStorage.getItem("bb-key")
+    if (stored) keyStatus(stored).then(st => {
+      // only a definitive rejection signs out - a flaky network does not
+      if (st === "bad") { try { localStorage.removeItem("bb-key") } catch (e) {} }
+      renderMe()
+    })
+  } catch (e) {}
 
   boardRef = new Chessboard(document.getElementById("board"), {
     position: chess.fen(),

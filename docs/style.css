@@ -159,6 +159,29 @@ footer {
 }
 footer a { color: var(--ink-2); }
 
+/* the "me" button: Andrew's sign-in for game capture, quiet in the footer */
+.bb-me {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.bb-me.on { color: var(--accent); text-decoration: none; }
+.bb-me-input {
+  font: inherit;
+  font-size: 0.82rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 0.1rem 0.4rem;
+  width: 13ch;
+}
+
 /* light mode only: a dark edge so the board stands out on the pale page */
 :root[data-theme="light"] .board .cm-chessboard { outline: 2px solid #3a4a36; }
 
