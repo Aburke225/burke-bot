@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Train the style model: which of Stockfish's candidate moves would Andrew play?
 
-This is behavioral cloning (imitation learning): every position from his games
-past the opening becomes a training example — Stockfish proposes its top 5
-moves, and the label is the one he actually played. A conditional-logit model
+This is imitation learning (the specific method is behavioral cloning):
+every position from his games past the opening becomes a training example —
+Stockfish proposes its top 5 moves, and the label is the one he actually
+played. A conditional-logit model
 (softmax over per-move feature scores) learns his preferences. The browser
 ships the weights and, out of book, samples the bot's move from the model's
 probabilities over the live engine's top 5.
