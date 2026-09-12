@@ -15,7 +15,7 @@ A chess bot that plays like me — built from every game I've played on
 - While the game is inside that book, the bot samples its move from my real
   frequencies — if I play 1. e4 87% of the time, so does the bot.
 - Once the game leaves my games, a strength-capped Stockfish
-  (single-threaded WASM, skill level 3, depth 6 — roughly my level) takes over.
+  (single-threaded WASM, skill level 4, depth 8 — roughly my level) takes over.
 - A daily GitHub Action re-runs the pipeline, so new games teach the bot
   automatically.
 

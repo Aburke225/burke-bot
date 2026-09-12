@@ -1,5 +1,8 @@
 // Burkeley Bot — plays from Andrew's real games while the position is known,
-// then hands over to a strength-capped engine (~1200) once we leave them.
+// then hands over to a strength-capped engine once we leave them.
+// Engine target: ~1200 human / ~1400 chess.com-bot scale, triangulated from
+// his official 1002, his self-assessed 1200, and an 11.7% score vs 1600-1800
+// chess.com bots (performance 1335 on their scale).
 
 import { INPUT_EVENT_TYPE, COLOR, Chessboard, BORDER_TYPE } from "./vendor/cm-chessboard/src/Chessboard.js"
 import { MARKER_TYPE, Markers } from "./vendor/cm-chessboard/src/extensions/markers/Markers.js"
@@ -28,7 +31,7 @@ const engine = (() => {
   worker.onmessage = (e) => {
     const line = typeof e.data === "string" ? e.data : ""
     if (line === "uciok") {
-      worker.postMessage("setoption name Skill Level value 3")
+      worker.postMessage("setoption name Skill Level value 4")
       worker.postMessage("isready")
     } else if (line === "readyok") {
       readyResolve()
@@ -46,7 +49,7 @@ const engine = (() => {
       return new Promise(res => {
         onBest = res
         worker.postMessage("position fen " + fen)
-        worker.postMessage("go depth 6")
+        worker.postMessage("go depth 8")
       })
     },
   }

@@ -1,12 +1,12 @@
 {
-  "as_black": 158,
-  "as_white": 157,
-  "book_positions": 3818,
-  "draws": 12,
-  "games": 315,
+  "as_black": 180,
+  "as_white": 165,
+  "book_positions": 4145,
+  "draws": 13,
+  "games": 345,
   "last_game": "2025-12-20",
-  "losses": 145,
-  "manual_games": 0,
+  "losses": 171,
+  "manual_games": 30,
   "openings_black": [
     [
       "Owens Defense",
@@ -61,5 +61,5 @@
   ],
   "rating": 1002,
   "username": "Burkeley",
-  "wins": 158
+  "wins": 161
 }
