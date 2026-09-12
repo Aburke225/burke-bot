@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <div class="wrap">
@@ -35,6 +35,13 @@
             <div class="ov-buttons">
               <button id="pick-white" class="btn">Play as White</button>
               <button id="pick-black" class="btn">Play as Black</button>
+            </div>
+          </div>
+          <div class="board-overlay" id="confirm" hidden>
+            <p class="ov-kicker">are you sure?</p>
+            <div class="ov-buttons">
+              <button id="resign-no" class="btn">Back to the game</button>
+              <button id="resign-yes" class="btn">Yes, resign</button>
             </div>
           </div>
           <div class="board-overlay" id="end" hidden>
@@ -101,6 +108,6 @@
       render();
     })();
   </script>
-  <script type="module" src="app.js?v=11"></script>
+  <script type="module" src="app.js?v=12"></script>
 </body>
 </html>

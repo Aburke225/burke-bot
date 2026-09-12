@@ -206,7 +206,7 @@ footer a { color: var(--ink-2); }
 }
 .ov-kicker {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #cfd8c8;

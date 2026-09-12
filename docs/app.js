@@ -218,7 +218,7 @@ function renderMe() {
   let has = false
   try { has = !!localStorage.getItem("bb-key") } catch (e) {}
   btn.classList.toggle("on", has)
-  btn.textContent = has ? "logout" : "login"
+  btn.textContent = has ? "logout" : "It's me"
   btn.title = has
     ? "signed in - finished games train the bot"
     : "Andrew's sign-in for game capture"
@@ -359,6 +359,7 @@ function finish(result, line) {
 }
 
 function showEnd(result, line) {
+  document.getElementById("confirm").hidden = true
   document.getElementById("end-title").textContent =
     result === "w" ? "You win." : result === "l" ? "You lose." : "Draw."
   document.getElementById("end-line").textContent = line
@@ -368,15 +369,14 @@ function showEnd(result, line) {
 
 function setControls(on) {
   document.getElementById("draw-btn").disabled = !on
-  const r = document.getElementById("resign-btn")
-  r.disabled = !on
-  r.textContent = "Resign"
+  document.getElementById("resign-btn").disabled = !on
 }
 
 // ---------- pick a color / play again / resign / offer a draw ----------
 
 function startGame(userColor) {
   document.getElementById("pick").hidden = true
+  document.getElementById("confirm").hidden = true
   document.getElementById("end").hidden = true
   gameActive = true
   newGame(userColor)
@@ -394,26 +394,14 @@ function playAgain() {
   boardRef.setOrientation(COLOR.white, false)
   boardRef.setPosition(chess.fen(), false)
   setStatus("book", "new game", "Pick your color to start.")
+  document.getElementById("confirm").hidden = true
   document.getElementById("end").hidden = true
   document.getElementById("pick").hidden = false
 }
 
-let resignArmed = null
-
 function resignClick() {
   if (!gameActive) return
-  const btn = document.getElementById("resign-btn")
-  if (resignArmed) {
-    clearTimeout(resignArmed)
-    resignArmed = null
-    finish("l", "You resigned — I'll take it.")
-    return
-  }
-  btn.textContent = "Resign?"
-  resignArmed = setTimeout(() => {
-    resignArmed = null
-    btn.textContent = "Resign"
-  }, 3000)
+  document.getElementById("confirm").hidden = false
 }
 
 async function drawClick() {
@@ -429,11 +417,15 @@ async function drawClick() {
   if (myGame !== gameId || !gameActive) return
   const line1 = result.lines[1]
   const botCp = line1 ? -line1.cp : 0
-  if (botCp <= 60) {
+  const early = chess.moveNumber() <= 15
+  // early on, only a clearly losing bot takes the escape hatch; later,
+  // any roughly equal (or worse) position is a fair handshake
+  if (early ? botCp <= -150 : botCp <= 60) {
     finish("d", "I'll take the draw.")
   } else {
     btn.disabled = false
-    setStatus("engine", "draw declined", "No — I like my position. Your move.")
+    setStatus("engine", "draw declined",
+      early ? "A draw already? No — let's play on." : "No — I like my position. Your move.")
   }
 }
 
@@ -574,6 +566,13 @@ async function boot() {
   document.getElementById("again").addEventListener("click", playAgain)
   document.getElementById("draw-btn").addEventListener("click", drawClick)
   document.getElementById("resign-btn").addEventListener("click", resignClick)
+  document.getElementById("resign-no").addEventListener("click", () => {
+    document.getElementById("confirm").hidden = true
+  })
+  document.getElementById("resign-yes").addEventListener("click", () => {
+    document.getElementById("confirm").hidden = true
+    if (gameActive) finish("l", "You resigned — I'll take it.")
+  })
   setStatus("book", "new game", "Pick your color to start.")
 
   // dev hooks (console-only): load a FEN, drive moves, inspect state
@@ -599,6 +598,7 @@ async function boot() {
       botColor = userColor === "w" ? "b" : "w"
       document.getElementById("pick").hidden = true
       document.getElementById("end").hidden = true
+      document.getElementById("confirm").hidden = true
       gameActive = true
       setControls(true)
       renderMoves()
