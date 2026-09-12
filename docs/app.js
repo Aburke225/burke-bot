@@ -247,15 +247,12 @@ function newGame(userColor) {
 
 function renderStats(stats) {
   const list = document.getElementById("stats-list")
-  const rec = stats.wins + "W · " + stats.losses + "L · " + stats.draws + "D"
   const rows = [
-    ["games learned from", String(stats.games)],
-    ["record", rec],
     ["rating", stats.bot_scale_strength ? String(stats.bot_scale_strength) : "—"],
+    ["games learned from", String(stats.games)],
     ["book positions", stats.book_positions.toLocaleString("en-US")],
-    ["favorite as White", stats.openings_white[0] ? stats.openings_white[0][0] : "—"],
-    ["favorite as Black", stats.openings_black[0] ? stats.openings_black[0][0] : "—"],
-    ["last game learned", stats.last_game || "—"],
+    ["favorite opening as White", stats.openings_white[0] ? stats.openings_white[0][0] : "—"],
+    ["favorite opening as Black", stats.openings_black[0] ? stats.openings_black[0][0] : "—"],
   ]
   list.innerHTML = ""
   for (const [k, v] of rows) {
