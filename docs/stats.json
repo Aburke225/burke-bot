@@ -1,0 +1,65 @@
+{
+  "as_black": 158,
+  "as_white": 157,
+  "book_positions": 3818,
+  "draws": 12,
+  "games": 315,
+  "last_game": "2025-12-20",
+  "losses": 145,
+  "manual_games": 0,
+  "openings_black": [
+    [
+      "Owens Defense",
+      12
+    ],
+    [
+      "Reti Opening Queenside Fianchetto",
+      10
+    ],
+    [
+      "Sicilian Defense Bowdler Attack",
+      8
+    ],
+    [
+      "Van t Kruijs Opening",
+      6
+    ],
+    [
+      "Dutch Defense",
+      6
+    ],
+    [
+      "Sicilian Defense Old Sicilian",
+      6
+    ]
+  ],
+  "openings_white": [
+    [
+      "Scotch Game",
+      25
+    ],
+    [
+      "Kings Pawn Opening Kings",
+      10
+    ],
+    [
+      "Philidor Defense",
+      9
+    ],
+    [
+      "Scandinavian Defense Mieses Kotrc",
+      6
+    ],
+    [
+      "Scandinavian Defense Closed",
+      5
+    ],
+    [
+      "Petrovs Defense Steinitz Attack",
+      5
+    ]
+  ],
+  "rating": 1002,
+  "username": "Burkeley",
+  "wins": 158
+}

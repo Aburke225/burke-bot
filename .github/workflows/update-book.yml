@@ -1,0 +1,41 @@
+name: update book
+
+on:
+  schedule:
+    - cron: "17 13 * * *" # daily, 13:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install python-chess
+
+      - run: python pipeline/build.py
+
+      - name: commit and push if the book changed
+        run: |
+          git config user.name "Andrew Burke"
+          git config user.email "aburke225@berkeley.edu"
+          git add docs/book.json docs/stats.json
+          if git diff --cached --quiet; then
+            echo "no new games"
+          else
+            git commit -m "update book from latest games"
+            git push
+            # GitHub Pages sometimes skips builds triggered by token pushes — nudge it
+            curl -s -X POST \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/pages/builds" || true
+          fi

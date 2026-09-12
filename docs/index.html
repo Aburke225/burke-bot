@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Burkeley Bot</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#9822;</text></svg>">
+  <meta name="description" content="A chess bot built from every game Andrew Burke has ever played — it opens like him, attacks like him, and blunders like him.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
+  <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
+  <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
+  <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1 class="wordmark">burkeley bot<span class="gold">.</span></h1>
+      <p class="tagline">A bot built from every chess game I've ever played. It opens like me, attacks like me, and blunders like me.</p>
+    </header>
+
+    <main class="layout">
+      <section class="board-col">
+        <div class="board" id="board"></div>
+        <div class="controls">
+          <button id="new-white" class="btn">Play as White</button>
+          <button id="new-black" class="btn">Play as Black</button>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="status-card">
+          <div class="status-head">
+            <span class="dot" id="status-dot"></span>
+            <span id="status-label">setting up</span>
+          </div>
+          <p class="status-line" id="status-line">Loading my games…</p>
+        </div>
+
+        <div class="moves-card">
+          <h2>Moves</h2>
+          <ol class="movelist" id="movelist"></ol>
+        </div>
+
+        <div class="stats-card" id="stats-card">
+          <h2>The data behind me</h2>
+          <dl id="stats-list"></dl>
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      &copy; 2026 <a href="https://aburke225.github.io">Andrew Burke</a> &middot; <a href="https://github.com/Aburke225/burkeley-bot">Source on GitHub</a> &middot; games from <a href="https://www.chess.com/member/Burkeley">chess.com/Burkeley</a>
+    </footer>
+  </div>
+  <script type="module" src="app.js?v=2"></script>
+</body>
+</html>
