@@ -22,6 +22,7 @@ let inBook = true
 let gameId = 0
 let styleModel = null
 let stdStart = true  // capture only games that began from the standard position
+let gameActive = false
 const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/chess/game"
 
 // ---------- engine (single-threaded Stockfish 10, tuned to ~1200) ----------
@@ -48,6 +49,15 @@ const engine = (() => {
         const m = parseInt(mate ? mate[1] : "0", 10)
         const score = cp ? parseInt(cp[1], 10) : mate ? (m > 0 ? 10000 - m : -10000 - m) : 0
         lines[parseInt(mpv[1], 10)] = { uci: pv[1], cp: score }
+      }
+    } else if (line.startsWith("info ") && line.includes(" score ") && line.includes(" pv ")) {
+      const pv = / pv ([a-h][1-8][a-h][1-8][qrbn]?)/.exec(line)
+      const cp = / score cp (-?\d+)/.exec(line)
+      const mate = / score mate (-?\d+)/.exec(line)
+      if (pv) {
+        const m = parseInt(mate ? mate[1] : "0", 10)
+        const score = cp ? parseInt(cp[1], 10) : mate ? (m > 0 ? 10000 - m : -10000 - m) : 0
+        lines[1] = { uci: pv[1], cp: score }
       }
     } else if (line.startsWith("bestmove") && onBest) {
       const uci = line.split(" ")[1]
@@ -203,19 +213,19 @@ async function keyStatus(key) {
 }
 
 function renderMe() {
-  const btn = document.getElementById("bb-me")
+  const btn = document.getElementById("bb-login")
   if (!btn) return
   let has = false
   try { has = !!localStorage.getItem("bb-key") } catch (e) {}
   btn.classList.toggle("on", has)
-  btn.textContent = has ? "me \u2713" : "me"
+  btn.textContent = has ? "logout" : "login"
   btn.title = has
-    ? "signed in - finished games train the bot. Click to sign out."
+    ? "signed in - finished games train the bot"
     : "Andrew's sign-in for game capture"
 }
 
 function meClick() {
-  const btn = document.getElementById("bb-me")
+  const btn = document.getElementById("bb-login")
   let existing = null
   try { existing = localStorage.getItem("bb-key") } catch (e) {}
   if (existing) {
@@ -256,13 +266,11 @@ function meClick() {
 
 // ---------- game capture (keyed - only games I flag as mine are stored) ----------
 
-function captureGame() {
+function captureGame(result) {
   let key = null
   try { key = localStorage.getItem("bb-key") } catch (e) {}
   const hist = chess.history({ verbose: true })
-  if (!key || !stdStart || hist.length < 6 || !chess.isGameOver()) return
-  let result = "d"
-  if (chess.isCheckmate()) result = chess.turn() === botColor ? "w" : "l"
+  if (!key || !stdStart || hist.length < 6) return
   const body = {
     key,
     id: (crypto.randomUUID && crypto.randomUUID()) || Date.now() + "-" + Math.random().toString(16).slice(2),
@@ -284,7 +292,7 @@ function captureGame() {
 // ---------- game flow ----------
 
 async function botMove(board, id) {
-  if (chess.isGameOver()) { finish() ; return }
+  if (chess.isGameOver()) { finishAuto(); return }
   setStatus("thinking", "thinking", "…")
   const started = Date.now()
 
@@ -311,11 +319,11 @@ async function botMove(board, id) {
     }
     source = null
   }
-  if (!played) { finish(); return }
+  if (!played) { finishAuto(); return }
 
   await board.setPosition(chess.fen(), true)
   renderMoves()
-  if (chess.isGameOver()) { finish(); return }
+  if (chess.isGameOver()) { finishAuto(); return }
 
   if (source) {
     const pct = Math.round(100 * (source.wins + source.draws / 2) / source.n)
@@ -332,10 +340,101 @@ async function botMove(board, id) {
   board.enableMoveInput(inputHandler, botColor === "w" ? COLOR.black : COLOR.white)
 }
 
-function finish() {
-  setStatus("over", "game over", gameOverLine())
+function autoResult() {
+  if (chess.isCheckmate()) return chess.turn() === botColor ? "w" : "l"
+  return "d"
+}
+
+function finishAuto() {
+  finish(autoResult(), gameOverLine())
+}
+
+function finish(result, line) {
+  gameActive = false
+  setStatus("over", "game over", line)
   boardRef.disableMoveInput()
-  captureGame()
+  setControls(false)
+  showEnd(result, line)
+  captureGame(result)
+}
+
+function showEnd(result, line) {
+  document.getElementById("end-title").textContent =
+    result === "w" ? "You win." : result === "l" ? "You lose." : "Draw."
+  document.getElementById("end-line").textContent = line
+  document.getElementById("pick").hidden = true
+  document.getElementById("end").hidden = false
+}
+
+function setControls(on) {
+  document.getElementById("draw-btn").disabled = !on
+  const r = document.getElementById("resign-btn")
+  r.disabled = !on
+  r.textContent = "Resign"
+}
+
+// ---------- pick a color / play again / resign / offer a draw ----------
+
+function startGame(userColor) {
+  document.getElementById("pick").hidden = true
+  document.getElementById("end").hidden = true
+  gameActive = true
+  newGame(userColor)
+  setControls(true)
+}
+
+function playAgain() {
+  gameId++
+  gameActive = false
+  chess = new Chess()
+  inBook = true
+  renderMoves()
+  boardRef.disableMoveInput()
+  setControls(false)
+  boardRef.setOrientation(COLOR.white, false)
+  boardRef.setPosition(chess.fen(), false)
+  setStatus("book", "new game", "Pick your color to start.")
+  document.getElementById("end").hidden = true
+  document.getElementById("pick").hidden = false
+}
+
+let resignArmed = null
+
+function resignClick() {
+  if (!gameActive) return
+  const btn = document.getElementById("resign-btn")
+  if (resignArmed) {
+    clearTimeout(resignArmed)
+    resignArmed = null
+    finish("l", "You resigned — I'll take it.")
+    return
+  }
+  btn.textContent = "Resign?"
+  resignArmed = setTimeout(() => {
+    resignArmed = null
+    btn.textContent = "Resign"
+  }, 3000)
+}
+
+async function drawClick() {
+  if (!gameActive) return
+  const human = botColor === "w" ? "b" : "w"
+  if (chess.turn() !== human) return
+  const btn = document.getElementById("draw-btn")
+  btn.disabled = true
+  setStatus("thinking", "draw offer", "Hmm, let me look at the position…")
+  await engine.ready
+  const myGame = gameId
+  const result = await engine.bestMove(chess.fen())
+  if (myGame !== gameId || !gameActive) return
+  const line1 = result.lines[1]
+  const botCp = line1 ? -line1.cp : 0
+  if (botCp <= 60) {
+    finish("d", "I'll take the draw.")
+  } else {
+    btn.disabled = false
+    setStatus("engine", "draw declined", "No — I like my position. Your move.")
+  }
 }
 
 function inputHandler(event) {
@@ -395,8 +494,6 @@ function newGame(userColor) {
   chess = new Chess()
   inBook = true
   botColor = userColor === "w" ? "b" : "w"
-  document.getElementById("new-white").classList.toggle("active", userColor === "w")
-  document.getElementById("new-black").classList.toggle("active", userColor === "b")
   renderMoves()
   boardRef.disableMoveInput()
   boardRef.setOrientation(userColor === "w" ? COLOR.white : COLOR.black, false)
@@ -448,7 +545,7 @@ async function boot() {
   }
   renderStats(stats)
 
-  const meBtn = document.getElementById("bb-me")
+  const meBtn = document.getElementById("bb-login")
   if (meBtn) meBtn.addEventListener("click", meClick)
   renderMe()
   try {
@@ -472,9 +569,12 @@ async function boot() {
     ],
   })
 
-  document.getElementById("new-white").addEventListener("click", () => newGame("w"))
-  document.getElementById("new-black").addEventListener("click", () => newGame("b"))
-  newGame("w")
+  document.getElementById("pick-white").addEventListener("click", () => startGame("w"))
+  document.getElementById("pick-black").addEventListener("click", () => startGame("b"))
+  document.getElementById("again").addEventListener("click", playAgain)
+  document.getElementById("draw-btn").addEventListener("click", drawClick)
+  document.getElementById("resign-btn").addEventListener("click", resignClick)
+  setStatus("book", "new game", "Pick your color to start.")
 
   // dev hooks (console-only): load a FEN, drive moves, inspect state
   window.bb = {
@@ -497,6 +597,10 @@ async function boot() {
       chess = new Chess(fen)
       inBook = false
       botColor = userColor === "w" ? "b" : "w"
+      document.getElementById("pick").hidden = true
+      document.getElementById("end").hidden = true
+      gameActive = true
+      setControls(true)
       renderMoves()
       boardRef.disableMoveInput()
       boardRef.setOrientation(userColor === "w" ? COLOR.white : COLOR.black, false)

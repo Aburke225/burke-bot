@@ -42,10 +42,29 @@ body {
 
 .wrap { max-width: 1060px; margin: 0 auto; padding: 2.2rem 1.2rem 3rem; position: relative; }
 
-.theme-toggle {
+.header-actions {
   position: absolute;
   top: 2rem;
   right: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.login-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  height: 38px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.login-btn:hover { border-color: var(--accent); }
+.login-btn.on { color: var(--accent); border-color: var(--accent-dim); }
+.theme-toggle {
   width: 38px;
   height: 38px;
   border-radius: 10px;
@@ -159,27 +178,53 @@ footer {
 }
 footer a { color: var(--ink-2); }
 
-/* the "me" button: Andrew's sign-in for game capture, quiet in the footer */
-.bb-me {
-  font: inherit;
-  font-size: 0.82rem;
-  color: var(--ink-2);
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-}
-.bb-me.on { color: var(--accent); text-decoration: none; }
 .bb-me-input {
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
+  height: 38px;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--ink);
-  border-radius: 6px;
-  padding: 0.1rem 0.4rem;
-  width: 13ch;
+  border-radius: 10px;
+  padding: 0 0.7rem;
+  width: 15ch;
+}
+
+/* overlays: pick a color to start; the end screen when it's over */
+.board-wrap { position: relative; }
+.board-overlay[hidden] { display: none; }
+.board-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  background: rgba(10, 15, 10, 0.78);
+}
+.ov-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #cfd8c8;
+}
+.ov-buttons { display: flex; gap: 0.8rem; }
+.board-overlay .btn { background: var(--surface); }
+.ov-title {
+  margin: 0;
+  font-family: "Alfa Slab One", Georgia, serif;
+  font-size: 2.3rem;
+  color: #edf1e4;
+}
+.ov-line {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #cfd8c8;
+  text-align: center;
+  padding: 0 1rem;
 }
 
 /* light mode only: a dark edge so the board stands out on the pale page */
