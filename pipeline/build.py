@@ -201,13 +201,6 @@ def main():
     else:
         stats["bot_scale_strength"] = None
 
-    # latest rapid rating straight from the profile
-    try:
-        rapid = fetch_json(f"{API_BASE}/stats").get("chess_rapid", {})
-        stats["rating"] = rapid.get("last", {}).get("rating")
-    except Exception:
-        stats["rating"] = None
-
     os.makedirs(WEB_DIR, exist_ok=True)
     with open(os.path.join(WEB_DIR, "book.json"), "w") as f:
         json.dump({k: book[k] for k in sorted(book)}, f, separators=(",", ":"), sort_keys=True)
