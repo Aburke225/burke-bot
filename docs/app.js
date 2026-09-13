@@ -154,8 +154,10 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 
 // ---------- the style model (behavioral cloning over engine candidates) ----------
 
-// feature order is a contract with pipeline/train_style.py - change both or neither
+// feature order is a contract with pipeline/train_style.py - change both or neither:
+// 0-14 static (always active), 15-29 variable (the daily retrain picks a subset)
 const CHEB = (f1, r1, f2, r2) => Math.max(Math.abs(f1 - f2), Math.abs(r1 - r2))
+const PIECE_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
 
 // facts about the position that are the same for all five candidates
 function decisionContext() {
@@ -165,17 +167,18 @@ function decisionContext() {
   const userColor = botColor === "w" ? "b" : "w"
   let ek = null
   let botMat = 0, userMat = 0
-  const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
   for (const row of chess.board()) {
     for (const sq of row) {
       if (!sq) continue
-      if (sq.color === botColor) botMat += VAL[sq.type]
-      else userMat += VAL[sq.type]
+      if (sq.color === botColor) botMat += PIECE_VAL[sq.type]
+      else userMat += PIECE_VAL[sq.type]
       if (sq.type === "k" && sq.color === userColor) ek = sq.square
     }
   }
+  const mineLast = myLast && myLast.color === botColor ? myLast : null
   return {
-    prevMyTo: myLast && myLast.color === botColor ? myLast.to : null,
+    prevMyTo: mineLast ? mineLast.to : null,
+    prevMyFrom: mineLast ? mineLast.from : null,
     prevOppCapTo: oppLast && oppLast.captured ? oppLast.to : null,
     ek,
     ahead: botMat > userMat,
@@ -190,8 +193,10 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   const toAtt = chess.isAttacked(to, ctx.userColor) ? 1 : 0
   const played = tryMove({ from, to, promotion: uci.slice(4) || undefined })
   if (!played) return null
+  // the landing-square defense is judged with the move on the board
+  const defended = chess.isAttacked(to, played.color) ? 1 : 0
   chess.undo()
-  const x = new Array(22).fill(0)
+  const x = new Array(30).fill(0)
   x[0] = Math.min(Math.max(cpGapPawns, 0), 5)
   x[1] = rank / 4
   x[2] = played.captured ? 1 : 0
@@ -203,17 +208,25 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   const tf = to.charCodeAt(0) - 97, tr = to.charCodeAt(1) - 49
   x[12] = (Math.abs(tf - 3.5) + Math.abs(tr - 3.5)) / 7
   x[13] = (played.color === "w" ? tr > fr : tr < fr) ? 1 : 0
-  x[14] = (played.color === "w" ? tr < fr : tr > fr) ? 1 : 0
-  x[15] = ctx.prevMyTo === from ? 1 : 0
+  if (played.captured) x[14] = PIECE_VAL[played.captured] / 9
+  x[15] = (played.color === "w" ? tr < fr : tr > fr) ? 1 : 0
+  x[16] = ctx.prevMyTo === from ? 1 : 0
   if (ctx.ek) {
     const ef = ctx.ek.charCodeAt(0) - 97, er = ctx.ek.charCodeAt(1) - 49
-    x[16] = CHEB(tf, tr, ef, er) < CHEB(ff, fr, ef, er) ? 1 : 0
+    x[17] = CHEB(tf, tr, ef, er) < CHEB(ff, fr, ef, er) ? 1 : 0
+    x[24] = CHEB(tf, tr, ef, er) / 7
   }
-  x[17] = played.captured && ctx.prevOppCapTo === to ? 1 : 0
-  x[18] = fromAtt
-  x[19] = toAtt
-  x[20] = played.captured && ctx.ahead ? 1 : 0
-  x[21] = CHEB(ff, fr, tf, tr) / 7
+  x[18] = played.captured && ctx.prevOppCapTo === to ? 1 : 0
+  x[19] = fromAtt
+  x[20] = toAtt
+  x[21] = played.captured && ctx.ahead ? 1 : 0
+  x[22] = CHEB(ff, fr, tf, tr) / 7
+  x[23] = (played.color === "w" ? tr >= 4 : tr <= 3) ? 1 : 0
+  x[25] = played.captured && toAtt ? 1 : 0
+  x[26] = fromAtt && !toAtt ? 1 : 0
+  x[27] = defended
+  x[28] = (played.color === "w" ? fr === 0 : fr === 7) ? 1 : 0
+  x[29] = ctx.prevMyTo === from && ctx.prevMyFrom === to ? 1 : 0
   return x
 }
 
@@ -569,17 +582,17 @@ function renderStats(stats) {
 
 async function boot() {
   const [bookRes, statsRes, styleRes] = await Promise.all([
-    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=3").catch(() => null),
+    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=4").catch(() => null),
   ])
   book = await bookRes.json()
   const stats = await statsRes.json()
   try {
     if (styleRes && styleRes.ok) styleModel = await styleRes.json()
   } catch (e) { styleModel = null }
-  const okModel = styleModel && styleModel.features === "v3" &&
+  const okModel = styleModel && styleModel.features === "v4" &&
     Array.isArray(styleModel.weights) && Array.isArray(styleModel.active) &&
     styleModel.active.length === styleModel.weights.length &&
-    styleModel.active.every(i => Number.isInteger(i) && i >= 0 && i < 22)
+    styleModel.active.every(i => Number.isInteger(i) && i >= 0 && i < 30)
   if (okModel) {
     engine.ready.then(() => engine.useMultipv())
   } else {

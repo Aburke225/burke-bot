@@ -21,30 +21,50 @@ jobs:
 
       - run: pip install python-chess numpy
 
-      - run: sudo apt-get install -y stockfish || (sudo apt-get update && sudo apt-get install -y stockfish)
-
       - name: pull the games played on the site
         env:
           CHESS_KEY: ${{ secrets.CHESS_KEY }}
         run: |
           if [ -n "$CHESS_KEY" ]; then
+            # a failed pull keeps the committed copy - never drop games over a network blip
             curl -sf "https://prompt-yourself-bot.andrewburke225.workers.dev/chess/games?key=$CHESS_KEY" \
-              -o pipeline/site-games.json || rm -f pipeline/site-games.json
+              -o /tmp/site-games.json && mv /tmp/site-games.json pipeline/site-games.json \
+              || echo "pull failed - keeping the committed site games"
           fi
 
       - run: python pipeline/build.py
 
+      - name: check for new games
+        id: gate
+        run: |
+          fp_new=$(python3 -c "import hashlib; print(hashlib.md5(open('pipeline/games-cache.json','rb').read()).hexdigest())")
+          fp_old=$(cat pipeline/games-fingerprint.txt 2>/dev/null || echo "none")
+          if [ "$fp_new" = "$fp_old" ]; then
+            echo "no new games since the last retrain - stopping here"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "game set changed ($fp_old -> $fp_new) - rebuilding and retraining"
+            echo "$fp_new" > pipeline/games-fingerprint.txt
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: install stockfish
+        if: steps.gate.outputs.changed == 'yes'
+        run: sudo apt-get install -y stockfish || (sudo apt-get update && sudo apt-get install -y stockfish)
+
       - name: retrain the style model
+        if: steps.gate.outputs.changed == 'yes'
         run: python pipeline/train_style.py
 
-      - name: commit and push if the book changed
+      - name: commit and push
+        if: steps.gate.outputs.changed == 'yes'
         run: |
           git config user.name "Andrew Burke"
           git config user.email "aburke225@berkeley.edu"
-          git add docs/book.json docs/stats.json docs/style.json
+          git add docs/book.json docs/stats.json docs/style.json pipeline/games-fingerprint.txt
           if [ -f pipeline/site-games.json ]; then git add pipeline/site-games.json; fi
           if git diff --cached --quiet; then
-            echo "no new games"
+            echo "nothing to commit"
           else
             git commit -m "update book from latest games"
             git push
