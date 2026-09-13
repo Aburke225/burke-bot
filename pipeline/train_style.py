@@ -232,7 +232,25 @@ def main():
     for va, _, combo in results[:5]:
         print(f"  {va:.2%}  + {[EXTRA_NAMES[i] for i in combo] or ['(base only)']}")
 
-    cols = BASE + list(best_combo)
+    # stability: the incumbent subset keeps its seat unless a challenger beats
+    # it on validation by a real margin - near-ties should not churn nightly
+    SWITCH_MARGIN = 0.0025
+    chosen_combo = best_combo
+    try:
+        cur = json.load(open(OUT))
+        if cur.get("features") == "v3":
+            incumbent = tuple(sorted(i for i in cur.get("active", []) if i in EXTRAS))
+            inc_val = next((va for va, _, combo in results
+                            if tuple(sorted(combo)) == incumbent), None)
+            if inc_val is not None and best_val - inc_val < SWITCH_MARGIN:
+                chosen_combo = incumbent
+                if incumbent != tuple(sorted(best_combo)):
+                    print(f"keeping incumbent extras {[EXTRA_NAMES[i] for i in incumbent] or 'none'} "
+                          f"(challenger led by only {best_val - inc_val:.2%})")
+    except FileNotFoundError:
+        pass
+
+    cols = BASE + sorted(chosen_combo)
     fit_m = train_m | val_m
     w = train_vec(X[fit_m], M[fit_m], y[fit_m], cols)
     test_acc = accuracy(X[test_m], M[test_m], y[test_m], cols, w)
