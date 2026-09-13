@@ -155,24 +155,65 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 // ---------- the style model (behavioral cloning over engine candidates) ----------
 
 // feature order is a contract with pipeline/train_style.py - change both or neither
-function moveFeatures(uci, cpGapPawns, rank) {
+const CHEB = (f1, r1, f2, r2) => Math.max(Math.abs(f1 - f2), Math.abs(r1 - r2))
+
+// facts about the position that are the same for all five candidates
+function decisionContext() {
+  const hist = chess.history({ verbose: true })
+  const oppLast = hist[hist.length - 1]
+  const myLast = hist[hist.length - 2]
+  const userColor = botColor === "w" ? "b" : "w"
+  let ek = null
+  let botMat = 0, userMat = 0
+  const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+  for (const row of chess.board()) {
+    for (const sq of row) {
+      if (!sq) continue
+      if (sq.color === botColor) botMat += VAL[sq.type]
+      else userMat += VAL[sq.type]
+      if (sq.type === "k" && sq.color === userColor) ek = sq.square
+    }
+  }
+  return {
+    prevMyTo: myLast && myLast.color === botColor ? myLast.to : null,
+    prevOppCapTo: oppLast && oppLast.captured ? oppLast.to : null,
+    ek,
+    ahead: botMat > userMat,
+    userColor,
+  }
+}
+
+function moveFeatures(uci, cpGapPawns, rank, ctx) {
   const from = uci.slice(0, 2), to = uci.slice(2, 4)
+  // attack facts are judged in the pre-move position, so read them first
+  const fromAtt = chess.isAttacked(from, ctx.userColor) ? 1 : 0
+  const toAtt = chess.isAttacked(to, ctx.userColor) ? 1 : 0
   const played = tryMove({ from, to, promotion: uci.slice(4) || undefined })
   if (!played) return null
   chess.undo()
-  const x = new Array(15).fill(0)
-  x[0] = 1
-  x[1] = Math.min(Math.max(cpGapPawns, 0), 5)
-  x[2] = rank / 4
-  x[3] = played.captured ? 1 : 0
-  x[4] = played.san.includes("+") || played.san.includes("#") ? 1 : 0
-  x[5] = played.promotion ? 1 : 0
-  x[6] = played.flags.includes("k") || played.flags.includes("q") ? 1 : 0
-  x[7 + "pnbrqk".indexOf(played.piece)] = 1
+  const x = new Array(22).fill(0)
+  x[0] = Math.min(Math.max(cpGapPawns, 0), 5)
+  x[1] = rank / 4
+  x[2] = played.captured ? 1 : 0
+  x[3] = played.san.includes("+") || played.san.includes("#") ? 1 : 0
+  x[4] = played.promotion ? 1 : 0
+  x[5] = played.flags.includes("k") || played.flags.includes("q") ? 1 : 0
+  x[6 + "pnbrqk".indexOf(played.piece)] = 1
+  const ff = from.charCodeAt(0) - 97, fr = from.charCodeAt(1) - 49
   const tf = to.charCodeAt(0) - 97, tr = to.charCodeAt(1) - 49
-  x[13] = (Math.abs(tf - 3.5) + Math.abs(tr - 3.5)) / 7
-  const fr = from.charCodeAt(1) - 49
-  x[14] = (played.color === "w" ? tr > fr : tr < fr) ? 1 : 0
+  x[12] = (Math.abs(tf - 3.5) + Math.abs(tr - 3.5)) / 7
+  x[13] = (played.color === "w" ? tr > fr : tr < fr) ? 1 : 0
+  x[14] = (played.color === "w" ? tr < fr : tr > fr) ? 1 : 0
+  x[15] = ctx.prevMyTo === from ? 1 : 0
+  if (ctx.ek) {
+    const ef = ctx.ek.charCodeAt(0) - 97, er = ctx.ek.charCodeAt(1) - 49
+    x[16] = CHEB(tf, tr, ef, er) < CHEB(ff, fr, ef, er) ? 1 : 0
+  }
+  x[17] = played.captured && ctx.prevOppCapTo === to ? 1 : 0
+  x[18] = fromAtt
+  x[19] = toAtt
+  x[20] = played.captured && ctx.ahead ? 1 : 0
+  x[21] = CHEB(ff, fr, tf, tr) / 7
   return x
 }
 
@@ -182,11 +223,16 @@ function stylePick(lines) {
   const cands = Object.keys(lines).sort((a, b) => a - b).map(k => lines[k])
   if (cands.length < 2) return null
   const best = cands[0].cp
+  const ctx = decisionContext()
+  const w = styleModel.weights
+  const act = styleModel.active
   const scored = []
   for (let i = 0; i < cands.length; i++) {
-    const x = moveFeatures(cands[i].uci, (best - cands[i].cp) / 100, i)
+    const x = moveFeatures(cands[i].uci, (best - cands[i].cp) / 100, i, ctx)
     if (!x) continue
-    scored.push({ uci: cands[i].uci, z: x.reduce((sum, v, j) => sum + v * styleModel.weights[j], 0) })
+    let z = 0
+    for (let j = 0; j < w.length; j++) z += w[j] * x[act[j]]
+    scored.push({ uci: cands[i].uci, z })
   }
   if (scored.length < 2) return null
   const zmax = Math.max(...scored.map(c => c.z))
@@ -523,14 +569,18 @@ function renderStats(stats) {
 
 async function boot() {
   const [bookRes, statsRes, styleRes] = await Promise.all([
-    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=1").catch(() => null),
+    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=3").catch(() => null),
   ])
   book = await bookRes.json()
   const stats = await statsRes.json()
   try {
     if (styleRes && styleRes.ok) styleModel = await styleRes.json()
   } catch (e) { styleModel = null }
-  if (styleModel && Array.isArray(styleModel.weights)) {
+  const okModel = styleModel && styleModel.features === "v3" &&
+    Array.isArray(styleModel.weights) && Array.isArray(styleModel.active) &&
+    styleModel.active.length === styleModel.weights.length &&
+    styleModel.active.every(i => Number.isInteger(i) && i >= 0 && i < 22)
+  if (okModel) {
     engine.ready.then(() => engine.useMultipv())
   } else {
     styleModel = null

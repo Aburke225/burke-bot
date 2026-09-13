@@ -1,3 +1,4 @@
 .DS_Store
 __pycache__/
 pipeline/games-cache.json
+pipeline/examples-cache.json
