@@ -48,10 +48,8 @@ jobs:
             echo "changed=yes" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: install stockfish
-        if: steps.gate.outputs.changed == 'yes'
-        run: sudo apt-get install -y stockfish || (sudo apt-get update && sudo apt-get install -y stockfish)
-
+      # no engine install: the trainer analyses with the site's own vendored
+      # WASM stockfish, run through node (preinstalled on the runner)
       - name: retrain the style model
         if: steps.gate.outputs.changed == 'yes'
         run: python pipeline/train_style.py

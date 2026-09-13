@@ -25,10 +25,12 @@ let stdStart = true  // capture only games that began from the standard position
 let gameActive = false
 const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/chess/game"
 
-// ---------- engine (single-threaded Stockfish 10, tuned to ~1200) ----------
+// ---------- engine (single-threaded Stockfish 18 lite WASM) ----------
+// the same build the retrain pipeline analyses games with (run there via
+// node), so the model always chooses among the candidates it trained on
 
 const engine = (() => {
-  const worker = new Worker("vendor/stockfish/stockfish.js")
+  const worker = new Worker("vendor/stockfish/stockfish-18-lite-single.js")
   let onBest = null
   let lines = {}
   let readyResolve

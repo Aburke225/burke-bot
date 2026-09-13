@@ -34,9 +34,11 @@ so the browser can score exactly the chosen subset.
 Stability: the incumbent subset (read from docs/style.json) keeps its seat
 unless a challenger beats it on validation by SWITCH_MARGIN.
 
-Run after build.py. Stockfish analysis is cached in pipeline/examples-cache.json
-(rebuilt whenever games-cache.json is newer). The daily GitHub Action only
-runs this when pipeline/games-fingerprint.txt says the game set changed.
+Run after build.py. Analysis runs on the SITE'S OWN engine (the vendored WASM
+Stockfish under docs/vendor/stockfish/, driven headless through node) and is
+cached in pipeline/examples-cache.json (rebuilt whenever games-cache.json is
+newer or the engine changes). The daily GitHub Action only runs this when
+pipeline/games-fingerprint.txt says the game set changed.
 """
 
 import itertools
@@ -71,7 +73,28 @@ except ImportError:
 
 import chess.engine
 
-ENGINE_PATH = os.environ.get("STOCKFISH") or shutil.which("stockfish")
+# the trainer analyses with the SAME engine the site plays with: the vendored
+# WASM build, run headless through node. That kills train/play skew - the
+# model always chooses among candidates ranked exactly like its training data
+# - and upgrading the vendored engine upgrades both sides at once.
+# STOCKFISH=<path> still overrides with a native binary for experiments.
+VENDOR_JS = os.path.join(REPO_ROOT, "docs", "vendor", "stockfish",
+                         "stockfish-18-lite-single.js")
+
+
+def engine_cmd():
+    if os.environ.get("STOCKFISH"):
+        return [os.environ["STOCKFISH"]], os.path.basename(os.environ["STOCKFISH"])
+    node = shutil.which("node")
+    if node and os.path.exists(VENDOR_JS):
+        return [node, VENDOR_JS], os.path.basename(VENDOR_JS)
+    native = shutil.which("stockfish")
+    if native:
+        return [native], "stockfish-native"
+    return None, None
+
+
+ENGINE_CMD, ENGINE_TAG = engine_cmd()
 
 EXTRA_NAMES = {15: "retreat", 16: "same-piece", 17: "toward-king", 18: "recapture",
                19: "from-attacked", 20: "to-attacked", 21: "capture-ahead",
@@ -187,17 +210,19 @@ def get_examples():
     if (os.path.exists(EX_CACHE) and
             os.path.getmtime(EX_CACHE) > os.path.getmtime(CACHE)):
         d = json.load(open(EX_CACHE))
-        if d.get("fmt") == "c30":
+        if d.get("fmt") == "c30" and d.get("engine") == ENGINE_TAG:
             print(f"examples cache hit: {len(d['examples'])} examples")
             return d["examples"]
-    if not ENGINE_PATH:
-        print("no stockfish binary - skipping style training")
+    if not ENGINE_CMD:
+        print("no engine available (need node + the vendored build, or a "
+              "stockfish binary) - skipping style training")
         sys.exit(0)
     games = json.load(open(CACHE))
-    print(f"games in cache: {len(games)}", flush=True)
-    with chess.engine.SimpleEngine.popen_uci(ENGINE_PATH) as engine:
+    print(f"games in cache: {len(games)} (engine: {ENGINE_TAG})", flush=True)
+    with chess.engine.SimpleEngine.popen_uci(ENGINE_CMD) as engine:
         examples = collect_examples(games, engine)
-    json.dump({"fmt": "c30", "examples": examples}, open(EX_CACHE, "w"))
+    json.dump({"fmt": "c30", "engine": ENGINE_TAG, "examples": examples},
+              open(EX_CACHE, "w"))
     return examples
 
 
