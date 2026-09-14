@@ -144,12 +144,16 @@ function renderMoves() {
   movelistEl.innerHTML = ""
   for (let i = 0; i < hist.length; i += 2) {
     const li = document.createElement("li")
-    const w = document.createElement("span"); w.className = "w"; w.textContent = hist[i]
-    w.dataset.ply = i
+    // the inner .t span lets the highlight hug the move text while the outer
+    // span keeps its min-width so the columns stay aligned
+    const w = document.createElement("span"); w.className = "w"; w.dataset.ply = i
+    const wt = document.createElement("span"); wt.className = "t"; wt.textContent = hist[i]
+    w.appendChild(wt)
     li.appendChild(w)
     if (hist[i + 1]) {
-      const b = document.createElement("span"); b.className = "b"; b.textContent = hist[i + 1]
-      b.dataset.ply = i + 1
+      const b = document.createElement("span"); b.className = "b"; b.dataset.ply = i + 1
+      const bt = document.createElement("span"); bt.className = "t"; bt.textContent = hist[i + 1]
+      b.appendChild(bt)
       li.appendChild(b)
     }
     movelistEl.appendChild(li)
@@ -161,6 +165,7 @@ function renderMoves() {
   // any real move snaps history browsing back to the live position
   viewPly = -1
   endHiddenForBrowse = false
+  try { if (boardRef) boardRef.removeMarkers(MARKER_TYPE.square) } catch (e) {}
 }
 
 function gameOverLine() {
@@ -273,13 +278,14 @@ function noteOpening() {
 function openingRemark(name, family) {
   const s = openingStats[family]
   if (!s || !s.n) return "The " + name + "? I've never played this one."
-  const pct = Math.round(100 * (s.w + s.d / 2) / s.n)
+  // plain win rate - it explains itself, unlike a chess "score"
+  const pct = Math.round(100 * s.w / s.n)
   // "favorite" is about how often I reach for an opening, never how it goes -
   // you can love an opening and still be bad at it
-  if (family === favoriteFamily && s.n >= 8) return "The " + name + "! My favorite — I score " + pct + "% with it."
-  if (s.n >= 20) return "The " + name + "! One of my favorites — " + pct + "% for me."
-  if (s.n >= 8 && pct <= 42) return "The " + name + "... " + pct + "% for me lifetime. It's time to bump those numbers up!"
-  if (s.n >= 4) return "The " + name + " — I score " + pct + "% with this one."
+  if (family === favoriteFamily && s.n >= 8) return "The " + name + "! My favorite — I've won " + pct + "% of my games with it."
+  if (s.n >= 20) return "The " + name + "! One of my favorites — I've won " + pct + "% of my games with it."
+  if (s.n >= 8 && pct <= 40) return "The " + name + "... I've only won " + pct + "% of my games with it. It's time to bump those numbers up!"
+  if (s.n >= 4) return "The " + name + " — I've won " + pct + "% of my games with this one."
   return "The " + name + " — I've dabbled in it."
 }
 
@@ -329,13 +335,22 @@ function browseTo(k) {
   const end = document.getElementById("end")
   if (!live && !end.hidden) { end.hidden = true; endHiddenForBrowse = true }
   if (live && endHiddenForBrowse) { end.hidden = false; endHiddenForBrowse = false }
-  // mark the viewed move in the list (at live, that's the freshest move)
+  // mark the viewed move in the list (at live, that's the freshest move)...
   movelistEl.querySelectorAll(".cur").forEach(s => s.classList.remove("cur"))
   const mark = live ? n - 1 : k - 1
   if (mark >= 0) {
     const span = movelistEl.querySelector('[data-ply="' + mark + '"]')
     if (span) { span.classList.add("cur"); span.scrollIntoView({ block: "nearest" }) }
   }
+  // ...and highlight its from/to squares on the board
+  try {
+    boardRef.removeMarkers(MARKER_TYPE.square)
+    if (mark >= 0) {
+      const m = chess.history({ verbose: true })[mark]
+      boardRef.addMarker(MARKER_TYPE.square, m.from)
+      boardRef.addMarker(MARKER_TYPE.square, m.to)
+    }
+  } catch (e) {}
   // the chat matches the viewed position: replay what was said back then
   if (live) {
     if (lastLiveStatus) setStatusRaw(lastLiveStatus.kind, lastLiveStatus.label, lastLiveStatus.line)

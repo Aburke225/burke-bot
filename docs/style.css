@@ -216,9 +216,16 @@ footer a { color: var(--ink-2); }
 .board-wrap:has(.board-overlay:not([hidden])) .eval-bar,
 .board-wrap:has(.board-overlay:not([hidden])) .eval-num { opacity: 0.3; }
 
+/* selected piece + reviewed-move squares: a green highlight instead of the
+   marker's default darkening (board colors are fixed, so one color works) */
+.cm-chessboard .markers .marker.marker-square {
+  fill: #8fc57f;
+  opacity: 0.55;
+}
+
 /* the highlighted move: the freshest one, or the one being reviewed with
    the arrow keys - a real highlighter-style box, in the theme's green */
-.movelist span.cur {
+.movelist span.cur .t {
   background: var(--accent-dim);
   color: #edf1e4;
   border-radius: 4px;
