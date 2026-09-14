@@ -1069,7 +1069,10 @@ async function boot() {
       await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1200))])
     }
   } catch (e) {}
-  requestAnimationFrame(() => document.documentElement.classList.remove("booting"))
+  // removed directly, not in requestAnimationFrame: rAF callbacks do not run
+  // in a hidden tab, which would hold the veil for anyone who opens the site
+  // in a background tab until the inline fallback fires
+  document.documentElement.classList.remove("booting")
 
   // dev hooks (console-only): load a FEN, drive moves, inspect state
   window.bb = {
