@@ -173,25 +173,28 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 const sfx = (() => {
   let ctx = null
   const ac = () => ctx || (ctx = new (window.AudioContext || window.webkitAudioContext)())
-  // a light plastic tap: a very short noise tick through a broad bandpass.
-  // No bass, no ring - low-pass rumble with a long decay reads as metal,
-  // a dry mid-frequency tick reads as plastic.
-  function tap(gain, when = 0, tone = 2100, dur = 0.03) {
+  // a piece landing, modeled on measurements of chess.com's real samples:
+  // their move sound is PITCHED, not noise - a couple of damped tones near
+  // 460+900Hz, ~1ms attack, dead within ~20ms, nothing below 300Hz or
+  // above 2400Hz. So: a few exponentially damped sines, instantly muted.
+  function tock(freqs, weights, gain, when = 0, tau = 0.004, dur = 0.05) {
     try {
       const c = ac(), t = c.currentTime + when
       const len = Math.floor(c.sampleRate * dur)
-      const attack = Math.floor(c.sampleRate * 0.002)
+      const attack = Math.max(1, Math.floor(c.sampleRate * 0.001))
       const buf = c.createBuffer(1, len, c.sampleRate)
       const d = buf.getChannelData(0)
+      const wsum = weights.reduce((a, b) => a + b, 0)
       for (let i = 0; i < len; i++) {
-        const env = Math.min(1, i / attack) * Math.pow(1 - i / len, 2)
-        d[i] = (Math.random() * 2 - 1) * env
+        const ts = i / c.sampleRate
+        const env = Math.min(1, i / attack) * Math.exp(-ts / tau)
+        let v = 0
+        for (let j = 0; j < freqs.length; j++) v += weights[j] * Math.sin(2 * Math.PI * freqs[j] * ts)
+        d[i] = (v / wsum) * env
       }
       const s = c.createBufferSource(); s.buffer = buf
-      const f = c.createBiquadFilter()
-      f.type = "bandpass"; f.frequency.value = tone; f.Q.value = 0.8
       const g = c.createGain(); g.gain.value = gain
-      s.connect(f); f.connect(g); g.connect(c.destination)
+      s.connect(g); g.connect(c.destination)
       s.start(t)
     } catch (e) {}
   }
@@ -210,10 +213,12 @@ const sfx = (() => {
   }
   return {
     unlock() { try { ac().resume() } catch (e) {} },
-    move() { tap(0.5) },
-    capture() { tap(0.8, 0, 1300, 0.045) },  // one tap, firmer and a bit deeper
-    castle() { tap(0.45); tap(0.45, 0.09) },
-    check() { tap(0.5); blip(620, 0.14, 0.07, 0, 830) },
+    // frequencies/weights tuned so each synth's spectrum lands on the
+    // measured band profile of the matching chess.com sample
+    move() { tock([460, 900, 1280], [0.75, 1, 0.4], 0.5) },
+    capture() { tock([630, 1250, 1470], [0.95, 1, 0.7], 0.6, 0, 0.005, 0.06) },
+    castle() { tock([200, 420, 750], [1, 0.75, 0.6], 0.5, 0, 0.005, 0.06); tock([230, 460, 780], [1, 0.75, 0.6], 0.5, 0.09, 0.005, 0.06) },
+    check() { tock([980, 1400, 2900], [1, 0.6, 0.45], 0.55, 0, 0.006, 0.07) },
     promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
     start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
     end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
