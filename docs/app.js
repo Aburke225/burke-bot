@@ -173,21 +173,23 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 const sfx = (() => {
   let ctx = null
   const ac = () => ctx || (ctx = new (window.AudioContext || window.webkitAudioContext)())
-  // a soft wooden knock: a low-pass filtered noise burst with a gentle
-  // attack ramp (starting at full amplitude reads as a harsh click)
-  function knock(gain, when = 0, tone = 520) {
+  // a light plastic tap: a very short noise tick through a broad bandpass.
+  // No bass, no ring - low-pass rumble with a long decay reads as metal,
+  // a dry mid-frequency tick reads as plastic.
+  function tap(gain, when = 0, tone = 2100, dur = 0.03) {
     try {
       const c = ac(), t = c.currentTime + when
-      const len = Math.floor(c.sampleRate * 0.09)
-      const attack = Math.floor(c.sampleRate * 0.004)
+      const len = Math.floor(c.sampleRate * dur)
+      const attack = Math.floor(c.sampleRate * 0.002)
       const buf = c.createBuffer(1, len, c.sampleRate)
       const d = buf.getChannelData(0)
       for (let i = 0; i < len; i++) {
-        const env = Math.min(1, i / attack) * Math.pow(1 - i / len, 4)
+        const env = Math.min(1, i / attack) * Math.pow(1 - i / len, 2)
         d[i] = (Math.random() * 2 - 1) * env
       }
       const s = c.createBufferSource(); s.buffer = buf
-      const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = tone
+      const f = c.createBiquadFilter()
+      f.type = "bandpass"; f.frequency.value = tone; f.Q.value = 0.8
       const g = c.createGain(); g.gain.value = gain
       s.connect(f); f.connect(g); g.connect(c.destination)
       s.start(t)
@@ -208,10 +210,10 @@ const sfx = (() => {
   }
   return {
     unlock() { try { ac().resume() } catch (e) {} },
-    move() { knock(0.22) },
-    capture() { knock(0.42, 0, 650) },  // one knock, just firmer than a move
-    castle() { knock(0.2); knock(0.2, 0.09) },
-    check() { knock(0.22); blip(620, 0.14, 0.07, 0, 830) },
+    move() { tap(0.5) },
+    capture() { tap(0.8, 0, 1300, 0.045) },  // one tap, firmer and a bit deeper
+    castle() { tap(0.45); tap(0.45, 0.09) },
+    check() { tap(0.5); blip(620, 0.14, 0.07, 0, 830) },
     promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
     start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
     end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
