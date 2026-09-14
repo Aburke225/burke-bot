@@ -173,14 +173,19 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 const sfx = (() => {
   let ctx = null
   const ac = () => ctx || (ctx = new (window.AudioContext || window.webkitAudioContext)())
-  // a soft wooden knock: a short low-pass filtered noise burst
-  function knock(gain, when = 0, tone = 900) {
+  // a soft wooden knock: a low-pass filtered noise burst with a gentle
+  // attack ramp (starting at full amplitude reads as a harsh click)
+  function knock(gain, when = 0, tone = 520) {
     try {
       const c = ac(), t = c.currentTime + when
-      const len = Math.floor(c.sampleRate * 0.06)
+      const len = Math.floor(c.sampleRate * 0.09)
+      const attack = Math.floor(c.sampleRate * 0.004)
       const buf = c.createBuffer(1, len, c.sampleRate)
       const d = buf.getChannelData(0)
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3)
+      for (let i = 0; i < len; i++) {
+        const env = Math.min(1, i / attack) * Math.pow(1 - i / len, 4)
+        d[i] = (Math.random() * 2 - 1) * env
+      }
       const s = c.createBufferSource(); s.buffer = buf
       const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = tone
       const g = c.createGain(); g.gain.value = gain
@@ -203,10 +208,10 @@ const sfx = (() => {
   }
   return {
     unlock() { try { ac().resume() } catch (e) {} },
-    move() { knock(0.5) },
-    capture() { knock(0.75, 0, 700); knock(0.35, 0.05) },
-    castle() { knock(0.45); knock(0.45, 0.09) },
-    check() { knock(0.45); blip(620, 0.14, 0.09, 0, 830) },
+    move() { knock(0.22) },
+    capture() { knock(0.42, 0, 650) },  // one knock, just firmer than a move
+    castle() { knock(0.2); knock(0.2, 0.09) },
+    check() { knock(0.22); blip(620, 0.14, 0.07, 0, 830) },
     promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
     start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
     end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
@@ -298,6 +303,11 @@ function renderEvalBar(cpWhite) {
   let flipped = false
   try { flipped = boardRef.getOrientation() === COLOR.black } catch (e) {}
   bar.classList.toggle("flip", flipped)
+}
+
+function showEvalBar(on) {
+  document.getElementById("eval-bar").hidden = !on
+  document.getElementById("eval-num").hidden = !on
 }
 
 async function updateEval(fen) {
@@ -605,6 +615,7 @@ function startGame(userColor) {
   document.getElementById("end").hidden = true
   sfx.unlock()
   sfx.start()
+  showEvalBar(true)
   gameActive = true
   newGame(userColor)
   setControls(true)
@@ -621,6 +632,7 @@ function playAgain() {
   boardRef.setOrientation(COLOR.white, false)
   boardRef.setPosition(chess.fen(), false)
   renderEvalBar(0)
+  showEvalBar(false)
   setStatus("book", "new game", "Pick your color to start.")
   document.getElementById("confirm").hidden = true
   document.getElementById("end").hidden = true
@@ -834,6 +846,7 @@ async function boot() {
       document.getElementById("pick").hidden = true
       document.getElementById("end").hidden = true
       document.getElementById("confirm").hidden = true
+      showEvalBar(true)
       gameActive = true
       setControls(true)
       renderMoves()

@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <div class="wrap">
@@ -29,8 +29,8 @@
     <main class="layout">
       <section class="board-col">
         <div class="board-wrap">
-          <span class="eval-num" id="eval-num">0.0</span>
-          <div class="eval-bar" id="eval-bar" title="engine evaluation (White's chances)">
+          <span class="eval-num" id="eval-num" hidden>0.0</span>
+          <div class="eval-bar" id="eval-bar" title="engine evaluation (White's chances)" hidden>
             <div class="eval-fill" id="eval-fill"></div>
           </div>
           <div class="board" id="board"></div>
@@ -112,6 +112,6 @@
       render();
     })();
   </script>
-  <script type="module" src="app.js?v=18"></script>
+  <script type="module" src="app.js?v=19"></script>
 </body>
 </html>
