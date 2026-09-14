@@ -40,6 +40,51 @@ def book_key(board):
     return " ".join(board.fen().split(" ")[:3])
 
 
+def aimless_edge(board, move):
+    """Mirrors aimlessEdgePawn in docs/app.js: a quiet edge-pawn push with no
+    job (no kick, no coverage an enemy minor eyes, defends nothing, not a
+    passer, no luft, no storm) while the queens are still on."""
+    me = board.turn
+    if not (board.pieces(chess.QUEEN, chess.WHITE) and board.pieces(chess.QUEEN, chess.BLACK)):
+        return False
+    ff = chess.square_file(move.from_square)
+    tr = chess.square_rank(move.to_square)
+    ahead = range(tr + 1, 8) if me == chess.WHITE else range(0, tr)
+    passed = True
+    for f in {max(0, ff - 1), ff, min(7, ff + 1)}:
+        for r in ahead:
+            pc = board.piece_at(chess.square(f, r))
+            if pc and pc.piece_type == chess.PAWN and pc.color != me:
+                passed = False
+    if passed:
+        return False
+    board.push(move)
+    try:
+        pawn_atk = chess.BB_PAWN_ATTACKS[me][move.to_square]
+        for sq in chess.scan_forward(pawn_atk):
+            pc = board.piece_at(sq)
+            if pc and pc.color != me:
+                return False  # kicks an enemy piece
+            if pc and pc.color == me and board.attackers(not me, sq):
+                return False  # defends an attacked friend
+        for sq in chess.scan_forward(pawn_atk):
+            if not board.piece_at(sq):
+                for a in board.attackers(not me, sq):
+                    if board.piece_at(a).piece_type in (chess.KNIGHT, chess.BISHOP):
+                        return False  # prophylaxis
+        my_k, opp_k = board.king(me), board.king(not me)
+        single = abs(tr - chess.square_rank(move.from_square)) == 1
+        if single and my_k is not None and abs(chess.square_file(my_k) - ff) <= 2 and \
+                chess.square_rank(my_k) == (0 if me == chess.WHITE else 7):
+            return False  # luft
+        if opp_k is not None and my_k is not None and \
+                abs(chess.square_file(opp_k) - ff) <= 2 and abs(chess.square_file(my_k) - ff) >= 3:
+            return False  # pawn storm at their king
+        return True
+    finally:
+        board.pop()
+
+
 def severity(loss):
     if loss < 50: return "fine"
     if loss < 150: return "inaccuracy"
@@ -195,16 +240,26 @@ def profile_bot(engine, n_games):
                 def guarded(cand, x):
                     if x[20] == 1.0:
                         return True
+                    if x[22] == 1.0 and cand.promotion is None and aimless_edge(board, cand):
+                        return True
                     board.push(cand)
                     bad = any(sq != cand.from_square and board.piece_at(sq)
                               and board.piece_at(sq).color == me
                               and en_prise(board, sq, me) for sq in fresh)
                     board.pop()
                     return bad
-                keep = [i for i, (c, _, x) in enumerate(cands)
-                        if i == 0 or not guarded(c, x)]
-                if len(keep) < 2:
-                    keep = list(range(len(cands)))
+                # capture salience, mirroring docs/app.js: a near-best grab of
+                # a queen with a lesser piece pre-empts everything else
+                grabs = [i for i, (c, cp, x) in enumerate(cands)
+                         if x[2] == 1 and x[14] == 1.0 and x[28] < 1.0
+                         and best_cp - cp <= 50]
+                if grabs:
+                    keep = sorted(set([0] + grabs))
+                else:
+                    keep = [i for i, (c, _, x) in enumerate(cands)
+                            if i == 0 or not guarded(c, x)]
+                    if len(keep) < 2:
+                        keep = list(range(len(cands)))
                 z = np.array([float(np.dot(w, [cands[i][2][j] for j in active])) for i in keep])
                 z = z / PLAY_TEMP  # keep in sync with PLAY_TEMP in docs/app.js
                 p = np.exp(z - z.max()); p /= p.sum()

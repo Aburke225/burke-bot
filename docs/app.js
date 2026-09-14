@@ -470,6 +470,59 @@ function enPrise(sq, owner, opp) {
   return cheapest < victim
 }
 
+// judged with the pawn push already applied: does this quiet edge-pawn move
+// have a job? It counts as purposeful if it kicks an enemy piece, covers a
+// square an enemy minor eyes, defends an attacked friend, is a passer on the
+// march, gives a castled king luft, or storms the enemy king. A push that
+// does NONE of those while the queens are still on is something I play on
+// only 0.3% of my moves - the aggregate edge-pawn feature rations the rate,
+// but it can't see purpose.
+function aimlessEdgePawn(played, pf) {
+  const me = played.color, opp = me === "w" ? "b" : "w"
+  const tf = played.to.charCodeAt(0) - 97, tr = played.to.charCodeAt(1) - 49
+  let myK = null, oppK = null
+  const queens = { w: false, b: false }
+  for (const row of chess.board()) {
+    for (const sq of row) {
+      if (!sq) continue
+      if (sq.type === "q") queens[sq.color] = true
+      if (sq.type === "k") { if (sq.color === me) myK = sq.square; else oppK = sq.square }
+    }
+  }
+  if (!queens.w || !queens.b) return false // endgames: edge pushes are normal
+  const step = me === "w" ? 1 : -1
+  let passed = true
+  for (const f of [pf - 1, pf, pf + 1]) {
+    if (f < 0 || f > 7) continue
+    for (let r = tr + step; r >= 0 && r <= 7; r += step) {
+      const p = chess.get(String.fromCharCode(97 + f) + (r + 1))
+      if (p && p.type === "p" && p.color === opp) { passed = false; break }
+    }
+  }
+  if (passed) return false
+  const ar = tr + step
+  for (const f of [tf - 1, tf + 1]) {
+    if (f < 0 || f > 7 || ar < 0 || ar > 7) continue
+    const sq = String.fromCharCode(97 + f) + (ar + 1)
+    const p = chess.get(sq)
+    if (p && p.color === opp) return false // kicks an enemy piece
+    if (p && p.color === me && chess.attackers(sq, opp).length) return false // defends it
+    if (!p) {
+      for (const a of chess.attackers(sq, opp)) {
+        const ap = chess.get(a)
+        if (ap && (ap.type === "n" || ap.type === "b")) return false // prophylaxis
+      }
+    }
+  }
+  const kf = s => s.charCodeAt(0) - 97
+  const single = Math.abs(tr - (played.from.charCodeAt(1) - 49)) === 1
+  if (single && myK && Math.abs(kf(myK) - pf) <= 2 &&
+      myK.charCodeAt(1) - 49 === (me === "w" ? 0 : 7)) return false // luft
+  if (oppK && myK && Math.abs(kf(oppK) - pf) <= 2 &&
+      Math.abs(kf(myK) - pf) >= 3) return false // pawn storm at their king
+  return true
+}
+
 function moveFeatures(uci, cpGapPawns, rank, ctx) {
   const from = uci.slice(0, 2), to = uci.slice(2, 4)
   // attack facts are judged in the pre-move position, so read them first
@@ -501,6 +554,12 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
       break
     }
   }
+  // sampling guard #2: quiet edge-pawn pushes with no detectable purpose
+  let aimlessEdge = false
+  if (played.piece === "p" && !played.captured && !played.promotion) {
+    const pf = played.from.charCodeAt(0) - 97
+    if (pf === 0 || pf === 7) aimlessEdge = aimlessEdgePawn(played, pf)
+  }
   chess.undo()
   const x = new Array(30).fill(0)
   x[0] = Math.min(Math.max(cpGapPawns, 0), 5)
@@ -530,7 +589,8 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   x[27] = played.captured && toAtt && PIECE_VAL[played.captured] < PIECE_VAL[played.piece] ? 1 : 0
   x[28] = PIECE_VAL[played.piece] / 9
   x[29] = x[0] * ctx.tension
-  x.ignoresFresh = ignoresFresh  // guard flag, not a model feature
+  x.ignoresFresh = ignoresFresh  // guard flags, not model features
+  x.aimlessEdge = aimlessEdge
   return x
 }
 
@@ -549,14 +609,22 @@ function stylePick(lines) {
     if (!x) continue
     let z = 0
     for (let j = 0; j < w.length; j++) z += w[j] * x[act[j]]
-    // salience guard: the aggregate model can't know a threat is FRESH, and
-    // voluntary king-walks are a 1-in-175 event for me - candidates that do
-    // either only survive as the engine's #1 (deep tactics earn respect)
-    scored.push({ uci: cands[i].uci, z, guarded: x.ignoresFresh || x[20] === 1 })
+    // salience guard: the aggregate model can't know a threat is FRESH,
+    // voluntary king-walks are a 1-in-175 event for me, and purposeless
+    // edge-pawn pushes a 1-in-300 one - candidates that do any of these
+    // only survive as the engine's #1 (deep tactics earn respect)
+    scored.push({ uci: cands[i].uci, z,
+                  guarded: x.ignoresFresh || x.aimlessEdge || x[20] === 1,
+                  // a queen hanging to a lesser piece is the one thing I see
+                  // every time - a near-best grab of one (within half a pawn
+                  // of the engine's #1) makes every non-grab candidate guarded
+                  grab: x[2] === 1 && x[14] === 1 && x[28] < 1 &&
+                        best - cands[i].cp <= 50 })
   }
   if (scored.length < 2) return null
-  const clean = scored.filter((c, i) => i === 0 || !c.guarded)
-  const pool = clean.length >= 2 ? clean : scored
+  const hasGrab = scored.some(c => c.grab)
+  const clean = scored.filter((c, i) => i === 0 || (hasGrab ? c.grab : !c.guarded))
+  const pool = clean.length >= 2 || hasGrab ? clean : scored
   const zmax = Math.max(...pool.map(c => c.z))
   let total = 0
   for (const c of pool) { c.p = Math.exp((c.z - zmax) / PLAY_TEMP); total += c.p }

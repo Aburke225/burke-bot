@@ -30,8 +30,14 @@ A chess bot that plays like me — built from every game I've played on
   keeps whichever predicts my moves best on held-out games (with a switching
   margin, so near-ties don't churn the model). `docs/style.json` ships the
   winner. Candidates come from a depth-5 search — a human at my level thinks
-  a couple of moves ahead, so the bot does too. If the model fails to load,
-  a strength-capped engine (skill 4) takes over instead.
+  a couple of moves ahead, so the bot does too. At play time a salience guard
+  (mirrored in `audit.py`) drops candidates the aggregate model can't judge:
+  moves that ignore the threat the opponent just made, voluntary king-walks,
+  and purposeless edge-pawn pushes (no kick, no square an enemy minor eyes,
+  no luft, no storm, queens still on) — each survives only as the engine's
+  #1. And when a near-best capture of a queen by a lesser piece exists, the
+  bot takes it: that is the one thing I see every time. If the model fails
+  to load, a strength-capped engine (skill 4) takes over instead.
 - Games played against the bot on the site (only mine, flagged by sign-in)
   are captured and folded back in.
 - A daily GitHub Action checks for new games and, only when it finds any,
