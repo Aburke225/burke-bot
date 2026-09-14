@@ -40,7 +40,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 1060px; margin: 0 auto; padding: 2.2rem 1.2rem 3rem; position: relative; }
+.wrap { max-width: 1060px; margin: 0 auto; padding: 2.2rem 1.2rem 3rem; position: relative; opacity: 1; transition: opacity 0.18s ease; }
+/* boot veil: index.html adds .booting before first paint; app.js removes it
+   once fonts + board + stats have settled, so the page fades in as one unit */
+.booting .wrap { opacity: 0; transition: none; }
 
 .header-actions {
   position: absolute;
@@ -96,7 +99,7 @@ body {
   align-items: start;
 }
 
-.board { width: 100%; }
+.board { width: 100%; aspect-ratio: 1 / 1; } /* reserve the square before the svg exists */
 
 .controls { display: flex; gap: 0.7rem; margin-top: 0.9rem; margin-left: var(--eval-w); }
 .btn {

@@ -1055,6 +1055,18 @@ async function boot() {
   setStatus("book", "new game", "Pick your color to start.")
   document.addEventListener("keydown", browseKey)
 
+  // lift the boot veil (index.html adds .booting before first paint): the
+  // board and stats are built by now - wait for the initial position to
+  // render and the webfonts to land, capped so a slow font CDN can't hold
+  // the page hostage; index.html's own 3s timeout covers a boot() failure
+  try { await boardRef.setPosition(chess.fen(), false) } catch (e) {}
+  try {
+    if (document.fonts && document.fonts.ready) {
+      await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1200))])
+    }
+  } catch (e) {}
+  requestAnimationFrame(() => document.documentElement.classList.remove("booting"))
+
   // dev hooks (console-only): load a FEN, drive moves, inspect state
   window.bb = {
     newGame,
