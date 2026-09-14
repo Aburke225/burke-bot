@@ -215,10 +215,11 @@ const sfx = (() => {
     unlock() { try { ac().resume() } catch (e) {} },
     // frequencies/weights tuned so each synth's spectrum lands on the
     // measured band profile of the matching chess.com sample
+    // his picks from the tasting panel: A move, B capture, A castle, D check
     move() { tock([460, 900, 1280], [0.75, 1, 0.4], 0.5) },
-    capture() { tock([630, 1250, 1470], [0.95, 1, 0.7], 0.6, 0, 0.005, 0.06) },
+    capture() { tock([473, 938, 1103], [0.95, 1, 0.7], 0.63, 0, 0.0065, 0.06) },
     castle() { tock([200, 420, 750], [1, 0.75, 0.6], 0.5, 0, 0.005, 0.06); tock([230, 460, 780], [1, 0.75, 0.6], 0.5, 0.09, 0.005, 0.06) },
-    check() { tock([980, 1400, 2900], [1, 0.6, 0.45], 0.55, 0, 0.006, 0.07) },
+    check() { tock([882, 1260], [1, 0.6], 0.47, 0, 0.0042, 0.07) },
     promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
     start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
     end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
@@ -256,14 +257,13 @@ function noteOpening() {
 
 function openingRemark(name, family) {
   const s = openingStats[family]
-  if (!s || !s.n) return "the " + name + "? That one's off my map — I'll be improvising soon."
-  const n = s.n
-  const pct = Math.round(100 * (s.w + s.d / 2) / n)
-  const games = n === 1 ? "1 game" : n + " games"
-  if (n >= 8 && pct >= 55) return "the " + name + "! One of my favorites — " + games + " and a " + pct + "% score."
-  if (n >= 8 && pct <= 42) return "the " + name + "... " + pct + "% for me lifetime. Today we fix that."
-  if (n >= 4) return "the " + name + " — " + games + ", " + pct + "% score for me."
-  return "the " + name + " — only " + games + " of mine, but I know the ideas."
+  if (!s || !s.n) return "the " + name + "? I've never played this one, but I'm a fast learner."
+  const pct = Math.round(100 * (s.w + s.d / 2) / s.n)
+  if (s.n >= 8 && pct >= 65) return "the " + name + "! My favorite — " + pct + "% for me."
+  if (s.n >= 8 && pct >= 55) return "the " + name + "! One of my favorites — " + pct + "% for me."
+  if (s.n >= 8 && pct <= 42) return "the " + name + "... " + pct + "% for me lifetime. Today we fix that."
+  if (s.n >= 4) return "the " + name + " — I score " + pct + "% with this one."
+  return "the " + name + " — I've dabbled in it."
 }
 
 function takeOpeningRemark() {
