@@ -234,8 +234,10 @@ footer a { color: var(--ink-2); }
 .board-overlay[hidden] { display: none; }
 .board-overlay {
   position: absolute;
-  top: 0; right: 0; bottom: 0;
-  left: var(--eval-w);
+  /* overshoot a couple of pixels: subpixel rounding of the rem-based gutter
+     could leave a hairline of board peeking out at the top and left */
+  top: -2px; right: -2px; bottom: -2px;
+  left: calc(var(--eval-w) - 2px);
   z-index: 5;
   display: flex;
   flex-direction: column;

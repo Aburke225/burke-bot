@@ -681,7 +681,10 @@ async function botMove(board, id) {
     const remark = takeOpeningRemark()
     setStatus("engine", "on my own", (remark ? remark + " " : "") + "Your move." + checkNote())
   }
-  board.enableMoveInput(inputHandler, botColor === "w" ? COLOR.black : COLOR.white)
+  // idempotent: overlapping game-start paths can reach here with input
+  // already on, and cm-chessboard throws on a double enable
+  try { board.disableMoveInput() } catch (e) {}
+  try { board.enableMoveInput(inputHandler, botColor === "w" ? COLOR.black : COLOR.white) } catch (e) {}
 }
 
 function autoResult() {
@@ -885,8 +888,14 @@ async function boot() {
   book = await bookRes.json()
   const stats = await statsRes.json()
   openingStats = stats.opening_stats || {}
-  favoriteFamily = Object.keys(openingStats).reduce((best, f) =>
-    !best || openingStats[f].n > openingStats[best].n ? f : best, null)
+  // "my favorite" comes from the panel's once-per-game counts (a game's most
+  // specific family) - the remark stats count pass-through families, where
+  // generic waypoints like the King's Pawn Game would win unfairly
+  const perGame = {}
+  for (const [name, n] of [...(stats.openings_white || []), ...(stats.openings_black || [])]) {
+    perGame[name] = (perGame[name] || 0) + n
+    if (!favoriteFamily || perGame[name] > perGame[favoriteFamily]) favoriteFamily = name
+  }
   try {
     if (openingsRes && openingsRes.ok) openingsMap = await openingsRes.json()
   } catch (e) { openingsMap = null }

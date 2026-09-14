@@ -121,16 +121,20 @@ def main():
             openings = json.load(f)
     opening_stats = collections.defaultdict(lambda: {"n": 0, "w": 0, "d": 0, "l": 0})
 
-    def note_opening_result(name, result, color):
+    def note_opening_result(name, fams, result, color):
         if not name or result not in ("w", "d", "l"):
             return
+        # the panel counts each game ONCE, under its most specific family -
+        # chess.com's URL names fragment one opening into many variations,
+        # which once let "Owens Defense" outvote a split-up Sicilian
         fam = name.split(":")[0].strip()
-        opening_stats[fam]["n"] += 1
-        opening_stats[fam][result] += 1
-        # the favorite-openings panel counts the same families - chess.com's
-        # URL names fragment one opening into many variations, which once let
-        # "Owens Defense" outvote a split-up Sicilian
         stats["openings_white" if color == chess.WHITE else "openings_black"][fam] += 1
+        # the in-game remarks count every family the game PASSED THROUGH -
+        # a Scotch game also lived in the King's Knight Opening for a ply,
+        # so that waypoint deserves its true frequency
+        for f in fams:
+            opening_stats[f]["n"] += 1
+            opening_stats[f][result] += 1
 
     book = collections.defaultdict(dict)  # key -> uci -> stats
     stats = {
@@ -187,6 +191,7 @@ def main():
 
         board = game.board()
         game_opening = None
+        game_fams = set()
         for ply, move in enumerate(game.mainline_moves()):
             if ply >= MAX_BOOK_PLY:
                 break
@@ -203,8 +208,11 @@ def main():
                 board.push(move)
             except (ValueError, AssertionError):
                 break
-            game_opening = openings.get(book_key(board), game_opening)
-        note_opening_result(game_opening, result, color)
+            nm = openings.get(book_key(board))
+            if nm:
+                game_opening = nm
+                game_fams.add(nm.split(":")[0].strip())
+        note_opening_result(game_opening, game_fams, result, color)
 
     stats["openings_white"] = stats["openings_white"].most_common(6)
     stats["openings_black"] = stats["openings_black"].most_common(6)
@@ -231,6 +239,7 @@ def main():
             cache.append({"color": g["color"], "moves": moves})
             board = chess.Board()
             game_opening = None
+            game_fams = set()
             for ply, uci in enumerate(moves):
                 try:
                     move = chess.Move.from_uci(uci)
@@ -248,8 +257,11 @@ def main():
                     entry[result] += 1
                 board.push(move)
                 if ply < MAX_BOOK_PLY:
-                    game_opening = openings.get(book_key(board), game_opening)
-            note_opening_result(game_opening, result, color)
+                    nm = openings.get(book_key(board))
+                    if nm:
+                        game_opening = nm
+                        game_fams.add(nm.split(":")[0].strip())
+            note_opening_result(game_opening, game_fams, result, color)
         print(f"site games ingested: {stats['site_games']}")
 
     # performance rating vs the chess.com bots (their scale runs hotter than

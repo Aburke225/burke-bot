@@ -12,8 +12,8 @@
     "Alekhine Defense": {
       "d": 0,
       "l": 0,
-      "n": 1,
-      "w": 1
+      "n": 3,
+      "w": 3
     },
     "Bird Opening": {
       "d": 0,
@@ -36,14 +36,14 @@
     "Caro-Kann Defense": {
       "d": 2,
       "l": 3,
-      "n": 9,
-      "w": 4
+      "n": 10,
+      "w": 5
     },
     "Center Game": {
       "d": 0,
       "l": 1,
-      "n": 1,
-      "w": 0
+      "n": 4,
+      "w": 3
     },
     "Dutch Defense": {
       "d": 0,
@@ -65,8 +65,8 @@
     },
     "Englund Gambit": {
       "d": 0,
-      "l": 0,
-      "n": 1,
+      "l": 1,
+      "n": 2,
       "w": 1
     },
     "Englund Gambit Declined": {
@@ -84,13 +84,13 @@
     "French Defense": {
       "d": 0,
       "l": 8,
-      "n": 15,
-      "w": 7
+      "n": 16,
+      "w": 8
     },
     "Horwitz Defense": {
       "d": 0,
-      "l": 1,
-      "n": 3,
+      "l": 3,
+      "n": 5,
       "w": 2
     },
     "Hungarian Opening": {
@@ -108,8 +108,14 @@
     "Italian Game": {
       "d": 0,
       "l": 1,
-      "n": 3,
-      "w": 2
+      "n": 4,
+      "w": 3
+    },
+    "King's Gambit": {
+      "d": 1,
+      "l": 0,
+      "n": 1,
+      "w": 0
     },
     "King's Gambit Declined": {
       "d": 2,
@@ -118,16 +124,16 @@
       "w": 0
     },
     "King's Knight Opening": {
-      "d": 0,
-      "l": 1,
-      "n": 3,
-      "w": 2
+      "d": 3,
+      "l": 44,
+      "n": 96,
+      "w": 49
     },
     "King's Pawn Game": {
-      "d": 1,
-      "l": 7,
-      "n": 18,
-      "w": 10
+      "d": 12,
+      "l": 123,
+      "n": 264,
+      "w": 129
     },
     "Modern Defense": {
       "d": 0,
@@ -136,9 +142,9 @@
       "w": 0
     },
     "Nimzowitsch Defense": {
-      "d": 0,
-      "l": 3,
-      "n": 8,
+      "d": 1,
+      "l": 4,
+      "n": 10,
       "w": 5
     },
     "Old Indian Defense": {
@@ -168,7 +174,13 @@
     "Pirc Defense": {
       "d": 0,
       "l": 7,
-      "n": 11,
+      "n": 12,
+      "w": 5
+    },
+    "Queen's Gambit": {
+      "d": 0,
+      "l": 15,
+      "n": 19,
       "w": 4
     },
     "Queen's Gambit Accepted": {
@@ -184,10 +196,10 @@
       "w": 2
     },
     "Queen's Pawn Game": {
-      "d": 0,
-      "l": 4,
-      "n": 16,
-      "w": 12
+      "d": 1,
+      "l": 33,
+      "n": 61,
+      "w": 27
     },
     "Rapport-Jobava System, with e6": {
       "d": 0,
@@ -201,11 +213,23 @@
       "n": 1,
       "w": 1
     },
+    "Richter-Veresov Attack": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
     "Ruy Lopez": {
       "d": 0,
       "l": 2,
       "n": 8,
       "w": 6
+    },
+    "Saragossa Opening": {
+      "d": 0,
+      "l": 1,
+      "n": 1,
+      "w": 0
     },
     "Scandinavian Defense": {
       "d": 0,
@@ -221,9 +245,9 @@
     },
     "Sicilian Defense": {
       "d": 4,
-      "l": 28,
-      "n": 58,
-      "w": 26
+      "l": 29,
+      "n": 62,
+      "w": 29
     },
     "Slav Defense": {
       "d": 0,
@@ -239,9 +263,15 @@
     },
     "Three Knights Opening": {
       "d": 0,
-      "l": 0,
-      "n": 2,
-      "w": 2
+      "l": 3,
+      "n": 7,
+      "w": 4
+    },
+    "Van Geet Opening": {
+      "d": 0,
+      "l": 1,
+      "n": 1,
+      "w": 0
     },
     "Van't Kruijs Opening": {
       "d": 0,
@@ -252,13 +282,13 @@
     "Vienna Game": {
       "d": 1,
       "l": 3,
-      "n": 5,
-      "w": 1
+      "n": 7,
+      "w": 3
     },
     "Zukertort Opening": {
       "d": 0,
-      "l": 3,
-      "n": 3,
+      "l": 7,
+      "n": 7,
       "w": 0
     }
   },
