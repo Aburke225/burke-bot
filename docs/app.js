@@ -122,10 +122,21 @@ function pickBookMove() {
   return null
 }
 
-function setStatus(kind, label, line) {
+// the chat browses along with the board: what was said is remembered per ply
+// ("thinking" is transient and never remembered)
+let statusByPly = {}
+let lastLiveStatus = null
+
+function setStatusRaw(kind, label, line) {
   statusDot.className = "dot " + kind
   statusLabel.textContent = label
   statusLine.textContent = line
+}
+
+function setStatus(kind, label, line) {
+  setStatusRaw(kind, label, line)
+  lastLiveStatus = { kind, label, line }
+  if (kind !== "thinking") statusByPly[chess.history().length] = { kind, label, line }
 }
 
 function renderMoves() {
@@ -144,6 +155,9 @@ function renderMoves() {
     movelistEl.appendChild(li)
   }
   movelistEl.scrollTop = movelistEl.scrollHeight
+  // the freshest move wears the highlight (the chat no longer names moves)
+  const last = movelistEl.querySelector('[data-ply="' + (hist.length - 1) + '"]')
+  if (last) last.classList.add("cur")
   // any real move snaps history browsing back to the live position
   viewPly = -1
   endHiddenForBrowse = false
@@ -219,7 +233,7 @@ const sfx = (() => {
     move() { tock([460, 900, 1280], [0.75, 1, 0.4], 0.5) },
     capture() { tock([473, 938, 1103], [0.95, 1, 0.7], 0.63, 0, 0.0065, 0.06) },
     castle() { tock([200, 420, 750], [1, 0.75, 0.6], 0.5, 0, 0.005, 0.06); tock([230, 460, 780], [1, 0.75, 0.6], 0.5, 0.09, 0.005, 0.06) },
-    check() { tock([882, 1260], [1, 0.6], 0.47, 0, 0.0042, 0.07) },
+    check() { tock([882, 1260], [1, 0.6], 0.55, 0, 0.0042, 0.07) },
     promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
     start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
     end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
@@ -240,6 +254,7 @@ function playMoveSound(m) {
 
 let openingsMap = null      // book-style position key -> opening name
 let openingStats = {}       // family -> {n, w, d, l} from my real games
+let favoriteFamily = null   // the family I've played most often
 let announcedFamilies = new Set()
 let pendingOpeningRemark = null
 
@@ -257,13 +272,15 @@ function noteOpening() {
 
 function openingRemark(name, family) {
   const s = openingStats[family]
-  if (!s || !s.n) return "the " + name + "? I've never played this one, but I'm a fast learner."
+  if (!s || !s.n) return "The " + name + "? I've never played this one."
   const pct = Math.round(100 * (s.w + s.d / 2) / s.n)
-  if (s.n >= 8 && pct >= 65) return "the " + name + "! My favorite — " + pct + "% for me."
-  if (s.n >= 8 && pct >= 55) return "the " + name + "! One of my favorites — " + pct + "% for me."
-  if (s.n >= 8 && pct <= 42) return "the " + name + "... " + pct + "% for me lifetime. Today we fix that."
-  if (s.n >= 4) return "the " + name + " — I score " + pct + "% with this one."
-  return "the " + name + " — I've dabbled in it."
+  // "favorite" is about how often I reach for an opening, never how it goes -
+  // you can love an opening and still be bad at it
+  if (family === favoriteFamily && s.n >= 8) return "The " + name + "! My favorite — I score " + pct + "% with it."
+  if (s.n >= 20) return "The " + name + "! One of my favorites — " + pct + "% for me."
+  if (s.n >= 8 && pct <= 42) return "The " + name + "... " + pct + "% for me lifetime. It's time to bump those numbers up!"
+  if (s.n >= 4) return "The " + name + " — I score " + pct + "% with this one."
+  return "The " + name + " — I've dabbled in it."
 }
 
 function takeOpeningRemark() {
@@ -312,11 +329,20 @@ function browseTo(k) {
   const end = document.getElementById("end")
   if (!live && !end.hidden) { end.hidden = true; endHiddenForBrowse = true }
   if (live && endHiddenForBrowse) { end.hidden = false; endHiddenForBrowse = false }
-  // mark the viewed move in the list
+  // mark the viewed move in the list (at live, that's the freshest move)
   movelistEl.querySelectorAll(".cur").forEach(s => s.classList.remove("cur"))
-  if (!live && k > 0) {
-    const span = movelistEl.querySelector('[data-ply="' + (k - 1) + '"]')
+  const mark = live ? n - 1 : k - 1
+  if (mark >= 0) {
+    const span = movelistEl.querySelector('[data-ply="' + mark + '"]')
     if (span) { span.classList.add("cur"); span.scrollIntoView({ block: "nearest" }) }
+  }
+  // the chat matches the viewed position: replay what was said back then
+  if (live) {
+    if (lastLiveStatus) setStatusRaw(lastLiveStatus.kind, lastLiveStatus.label, lastLiveStatus.line)
+  } else {
+    for (let p = k; p >= 0; p--) {
+      if (statusByPly[p]) { setStatusRaw(statusByPly[p].kind, statusByPly[p].label, statusByPly[p].line); break }
+    }
   }
   updateEval(fen)
 }
@@ -608,28 +634,23 @@ async function botMove(board, id) {
   updateEval(chess.fen())
   noteOpening()  // ...and so may the bot's reply
 
+  // the move itself is never named - it wears the highlight in the move list
   if (source) {
     const remark = takeOpeningRemark()
     if (remark) {
-      setStatus("book", "book move", played.san + " — " + remark + " Your move." + checkNote())
+      setStatus("book", "book move", remark + " Your move." + checkNote())
     } else {
       const pct = Math.round(100 * (source.wins + source.draws / 2) / source.n)
       const times = source.n === 1 ? "once before" : source.n + " of " + source.total + " times"
-      setStatus("book", "book move", played.san + " — I've played this here " + times + " (" + pct + "% score with it). Your move." + checkNote())
+      setStatus("book", "book move", "I've played this here " + times + " (" + pct + "% score with it). Your move." + checkNote())
     }
+  } else if (inBook) {
+    // the leaving-book line wins; a pending opening remark keeps for the next move
+    inBook = false
+    setStatus("engine", "on my own", "We've left my games, so I'm thinking for myself now. Your move." + checkNote())
   } else {
-    if (inBook) {
-      // the leaving-book line wins; a pending opening remark keeps for the next move
-      inBook = false
-      setStatus("engine", "on my own", played.san + " — we've left my games, so I'm thinking for myself now. Your move." + checkNote())
-    } else {
-      const remark = takeOpeningRemark()
-      if (remark) {
-        setStatus("engine", "on my own", played.san + " — " + remark + " Your move." + checkNote())
-      } else {
-        setStatus("engine", "on my own", played.san + ". Your move." + checkNote())
-      }
-    }
+    const remark = takeOpeningRemark()
+    setStatus("engine", "on my own", (remark ? remark + " " : "") + "Your move." + checkNote())
   }
   board.enableMoveInput(inputHandler, botColor === "w" ? COLOR.black : COLOR.white)
 }
@@ -789,6 +810,7 @@ function newGame(userColor) {
   chess = new Chess()
   inBook = true
   resetOpening()
+  statusByPly = {}
   botColor = userColor === "w" ? "b" : "w"
   renderMoves()
   boardRef.disableMoveInput()
@@ -834,6 +856,8 @@ async function boot() {
   book = await bookRes.json()
   const stats = await statsRes.json()
   openingStats = stats.opening_stats || {}
+  favoriteFamily = Object.keys(openingStats).reduce((best, f) =>
+    !best || openingStats[f].n > openingStats[best].n ? f : best, null)
   try {
     if (openingsRes && openingsRes.ok) openingsMap = await openingsRes.json()
   } catch (e) { openingsMap = null }
@@ -911,6 +935,7 @@ async function boot() {
       chess = new Chess(fen)
       inBook = false
       resetOpening()
+      statusByPly = {}
       botColor = userColor === "w" ? "b" : "w"
       document.getElementById("pick").hidden = true
       document.getElementById("end").hidden = true

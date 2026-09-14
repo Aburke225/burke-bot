@@ -216,8 +216,14 @@ footer a { color: var(--ink-2); }
 .board-wrap:has(.board-overlay:not([hidden])) .eval-bar,
 .board-wrap:has(.board-overlay:not([hidden])) .eval-num { opacity: 0.3; }
 
-/* the move being reviewed with the arrow keys */
-.movelist span.cur { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+/* the highlighted move: the freshest one, or the one being reviewed with
+   the arrow keys - a real highlighter-style box, in the theme's green */
+.movelist span.cur {
+  background: var(--accent-dim);
+  color: #edf1e4;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
 .board-overlay[hidden] { display: none; }
 .board-overlay {
   position: absolute;
