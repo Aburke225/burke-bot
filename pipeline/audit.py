@@ -21,7 +21,7 @@ import chess
 import chess.engine
 
 from train_style import (CACHE, DEPTH, ENGINE_CMD, MIN_PLY, MULTIPV, REPO_ROOT,
-                         features, position_tension)
+                         en_prise, features, position_tension)
 import os
 
 BOOK = os.path.join(REPO_ROOT, "docs", "book.json")
@@ -146,6 +146,7 @@ def profile_bot(engine, n_games):
         board = chess.Board()
         prev = {chess.WHITE: (None, None), chess.BLACK: (None, None)}  # (to, from)
         prev_cap = {chess.WHITE: None, chess.BLACK: None}  # last capture square BY that side
+        last_move_to = None  # destination of the previous ply's move
         for ply in range(160):
             if board.is_game_over():
                 break
@@ -181,10 +182,33 @@ def profile_bot(engine, n_games):
                     cands.append((cand, cp, x))
                 if not cands:
                     break
-                z = np.array([float(np.dot(w, [x[i] for i in active])) for _, _, x in cands])
+                # salience guard, mirroring docs/app.js stylePick: drop candidates
+                # that ignore the threat the opponent JUST made, and voluntary
+                # king-walks - unless engine-best, or fewer than 2 would remain
+                fresh = []
+                if last_move_to is not None:
+                    for sq, pc in board.piece_map().items():
+                        if (pc.color == me and pc.piece_type in
+                                (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN)
+                                and last_move_to in board.attackers(not me, sq)):
+                            fresh.append(sq)
+                def guarded(cand, x):
+                    if x[20] == 1.0:
+                        return True
+                    board.push(cand)
+                    bad = any(sq != cand.from_square and board.piece_at(sq)
+                              and board.piece_at(sq).color == me
+                              and en_prise(board, sq, me) for sq in fresh)
+                    board.pop()
+                    return bad
+                keep = [i for i, (c, _, x) in enumerate(cands)
+                        if i == 0 or not guarded(c, x)]
+                if len(keep) < 2:
+                    keep = list(range(len(cands)))
+                z = np.array([float(np.dot(w, [cands[i][2][j] for j in active])) for i in keep])
                 z = z / PLAY_TEMP  # keep in sync with PLAY_TEMP in docs/app.js
                 p = np.exp(z - z.max()); p /= p.sum()
-                pick = rng.choices(range(len(cands)), weights=p.tolist())[0]
+                pick = keep[rng.choices(range(len(keep)), weights=p.tolist())[0]]
                 move, my_cp, x = cands[pick]
                 analysed = (max(0, best_cp - my_cp), x,
                             my_cp <= -9000 <= best_cp)
@@ -201,6 +225,7 @@ def profile_bot(engine, n_games):
                         prof.add(loss, x, mate_allowed)
             prev[me] = (move.to_square, move.from_square)
             prev_cap[me] = move.to_square if board.is_capture(move) else None
+            last_move_to = move.to_square
             board.push(move)
         if (game_no + 1) % 10 == 0:
             print(f"  {game_no + 1}/{n_games} games, {prof.n} moves profiled", flush=True)

@@ -430,21 +430,44 @@ function decisionContext() {
   const oppLast = hist[hist.length - 1]
   const myLast = hist[hist.length - 2]
   const userColor = botColor === "w" ? "b" : "w"
-  let ek = null
-  for (const row of chess.board()) {
-    for (const sq of row) {
-      if (sq && sq.type === "k" && sq.color === userColor) ek = sq.square
+  const mineLast = myLast && myLast.color === botColor ? myLast : null
+  const castling = chess.fen().split(" ")[2]
+  // squares of my minor+ pieces the opponent's LAST move just attacked -
+  // humans miss stale threats, not the one that was played a second ago
+  const freshThreats = []
+  if (oppLast) {
+    for (const row of chess.board()) {
+      for (const sq of row) {
+        if (sq && sq.color === botColor && "nbrq".includes(sq.type) &&
+            chess.attackers(sq.square, userColor).includes(oppLast.to)) {
+          freshThreats.push(sq.square)
+        }
+      }
     }
   }
-  const mineLast = myLast && myLast.color === botColor ? myLast : null
   return {
     prevMyTo: mineLast ? mineLast.to : null,
     prevMyFrom: mineLast ? mineLast.from : null,
     prevOppCapTo: oppLast && oppLast.captured ? oppLast.to : null,
-    ek,
+    canCastle: botColor === "w" ? /[KQ]/.test(castling) : /[kq]/.test(castling),
+    inCheck: chess.inCheck(),
+    freshThreats,
     tension: Math.min(1, chess.moves({ verbose: true }).filter(m => m.captured).length / 10),
     userColor,
   }
+}
+
+// attacked and (undefended, or the cheapest attacker is worth less than the
+// piece) - a defended queen attacked by a knight is still lost. Judged with
+// the candidate move applied to the board.
+function enPrise(sq, owner, opp) {
+  const atk = chess.attackers(sq, opp)
+  if (!atk.length) return false
+  if (!chess.isAttacked(sq, owner)) return true
+  const victim = PIECE_VAL[chess.get(sq).type]
+  let cheapest = 99
+  for (const a of atk) cheapest = Math.min(cheapest, PIECE_VAL[chess.get(a).type])
+  return cheapest < victim
 }
 
 function moveFeatures(uci, cpGapPawns, rank, ctx) {
@@ -454,20 +477,29 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   const toAtt = chess.isAttacked(to, ctx.userColor) ? 1 : 0
   const played = tryMove({ from, to, promotion: uci.slice(4) || undefined })
   if (!played) return null
-  // post-move facts, judged with the move on the board
-  const defended = chess.isAttacked(to, played.color) ? 1 : 0
-  const hangs = !defended && chess.isAttacked(to, ctx.userColor) ? 1 : 0
+  // post-move facts, judged with the move on the board (value-aware en prise)
+  const hangs = enPrise(to, played.color, ctx.userColor) ? 1 : 0
   let leaves = 0
   for (const row of chess.board()) {
     for (const sq of row) {
       if (!sq || sq.color !== played.color || sq.square === to) continue
       if (sq.type === "p" || sq.type === "k") continue
-      if (chess.isAttacked(sq.square, ctx.userColor) && !chess.isAttacked(sq.square, played.color)) {
+      if (enPrise(sq.square, played.color, ctx.userColor)) {
         leaves = 1
         break
       }
     }
     if (leaves) break
+  }
+  // sampling guard: does this move ignore the threat the opponent JUST made?
+  let ignoresFresh = false
+  for (const sq of ctx.freshThreats) {
+    if (sq === from) continue  // the threatened piece itself moved away
+    const p = chess.get(sq)
+    if (p && p.color === played.color && enPrise(sq, played.color, ctx.userColor)) {
+      ignoresFresh = true
+      break
+    }
   }
   chess.undo()
   const x = new Array(30).fill(0)
@@ -488,19 +520,17 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   x[17] = played.captured && ctx.prevOppCapTo === to ? 1 : 0
   x[18] = fromAtt
   x[19] = toAtt
-  if (ctx.ek) {
-    const ef = ctx.ek.charCodeAt(0) - 97, er = ctx.ek.charCodeAt(1) - 49
-    x[20] = CHEB(tf, tr, ef, er) / 7
-  }
+  x[20] = played.piece === "k" && !x[5] && ctx.canCastle && !ctx.inCheck ? 1 : 0
   x[21] = played.captured && toAtt ? 1 : 0
-  x[22] = defended
+  x[22] = played.piece === "p" && !played.captured && (ff === 0 || ff === 7) ? 1 : 0
   x[23] = (played.color === "w" ? fr === 0 : fr === 7) ? 1 : 0
-  x[24] = ctx.prevMyTo === from && ctx.prevMyFrom === to ? 1 : 0
+  x[24] = x[2] * x[0]
   x[25] = hangs
   x[26] = leaves
   x[27] = played.captured && toAtt && PIECE_VAL[played.captured] < PIECE_VAL[played.piece] ? 1 : 0
   x[28] = PIECE_VAL[played.piece] / 9
   x[29] = x[0] * ctx.tension
+  x.ignoresFresh = ignoresFresh  // guard flag, not a model feature
   return x
 }
 
@@ -519,18 +549,23 @@ function stylePick(lines) {
     if (!x) continue
     let z = 0
     for (let j = 0; j < w.length; j++) z += w[j] * x[act[j]]
-    scored.push({ uci: cands[i].uci, z })
+    // salience guard: the aggregate model can't know a threat is FRESH, and
+    // voluntary king-walks are a 1-in-175 event for me - candidates that do
+    // either only survive as the engine's #1 (deep tactics earn respect)
+    scored.push({ uci: cands[i].uci, z, guarded: x.ignoresFresh || x[20] === 1 })
   }
   if (scored.length < 2) return null
-  const zmax = Math.max(...scored.map(c => c.z))
+  const clean = scored.filter((c, i) => i === 0 || !c.guarded)
+  const pool = clean.length >= 2 ? clean : scored
+  const zmax = Math.max(...pool.map(c => c.z))
   let total = 0
-  for (const c of scored) { c.p = Math.exp((c.z - zmax) / PLAY_TEMP); total += c.p }
+  for (const c of pool) { c.p = Math.exp((c.z - zmax) / PLAY_TEMP); total += c.p }
   let r = Math.random() * total
-  for (const c of scored) {
+  for (const c of pool) {
     r -= c.p
     if (r <= 0) return c.uci
   }
-  return scored[0].uci
+  return pool[0].uci
 }
 
 // ---------- the "me" button: password sign-in for game capture ----------
@@ -882,7 +917,7 @@ function renderStats(stats) {
 
 async function boot() {
   const [bookRes, statsRes, styleRes, openingsRes] = await Promise.all([
-    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=5").catch(() => null),
+    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=8").catch(() => null),
     fetch("openings.json").catch(() => null),
   ])
   book = await bookRes.json()
@@ -902,7 +937,7 @@ async function boot() {
   try {
     if (styleRes && styleRes.ok) styleModel = await styleRes.json()
   } catch (e) { styleModel = null }
-  const okModel = styleModel && styleModel.features === "v5" &&
+  const okModel = styleModel && styleModel.features === "v8" &&
     Array.isArray(styleModel.weights) && Array.isArray(styleModel.active) &&
     styleModel.active.length === styleModel.weights.length &&
     styleModel.active.every(i => Number.isInteger(i) && i >= 0 && i < 30)

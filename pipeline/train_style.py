@@ -7,7 +7,7 @@ Stockfish proposes its top 10 moves, and the label is the one he actually
 played. A conditional-logit model (softmax over per-move feature scores)
 learns his preferences; the browser ships the weights and samples from them.
 
-CANONICAL FEATURES v5 (a CONTRACT with docs/app.js - change both or neither):
+CANONICAL FEATURES v8 (a CONTRACT with docs/app.js - change both or neither):
   --- 15 static features, always active ---
   0 cp_loss (pawns, clamped 0..5), 1 rank/4, 2 capture, 3 gives_check,
   4 promotion, 5 castle, 6..11 moved piece one-hot P N B R Q K,
@@ -15,28 +15,32 @@ CANONICAL FEATURES v5 (a CONTRACT with docs/app.js - change both or neither):
   --- 15 variable features, competing for a seat ---
   15 retreat, 16 same piece as my previous move, 17 recapture,
   18 from-square attacked, 19 to-square attacked (both judged pre-move),
-  20 destination's distance to the enemy king (cheb/7), 21 capture of a
-  defended piece, 22 landing square defended (judged post-move), 23 from my
-  back rank, 24 undo (same piece returns to where it just was),
+  20 king-walk (voluntary king move that forfeits castling rights: not a
+  castle, not in check - Andrew 0.6%, the engine offers one in 19% of
+  positions), 21 capture of a defended piece, 22 quiet edge-pawn push
+  (a/h-file pawn, no capture - engine favorite, Andrew 4%), 23 from my
+  back rank, 24 bad-capture (capture x pawns lost - my capture enthusiasm
+  does not extend to captures that lose material),
   --- the mistake-shaped five ---
-  25 hangs the moved piece (post-move: attacked and undefended), 26 leaves
-  another piece hanging (any own minor+ en prise post-move, landed square
-  excluded), 27 loses the exchange (captures a cheaper defended piece),
-  28 mover value (piece being risked /9), 29 sharp loss (cp_loss x position
-  tension - eval tolerance in messy positions).
+  25 hangs the moved piece (post-move EN PRISE: attacked and undefended,
+  OR attacked by a cheaper piece even if defended - a defended queen
+  attacked by a knight is still lost), 26 leaves another piece hanging
+  (any own minor+ en prise post-move, landed square excluded), 27 loses
+  the exchange (captures a cheaper defended piece), 28 mover value (piece
+  being risked /9), 29 sharp loss (cp_loss x position tension).
 (No bias feature: softmax over a shared candidate set cancels any constant.
  The pool is Stockfish's top TEN so genuinely bad, human moves are in it;
  rank/4 therefore runs 0..2.25. Cut from earlier contracts after never or
  rarely winning a seat: toward-king, capture-ahead, distance, enemy-half,
- escape.)
+ escape, defended-to, king-dist, undo-move.)
 
-Feature selection: the 15 static features are always in; ALL 32,768 subsets
-of the 15 variable features are trained on a train split and compete on a
-validation split (batched - every subset in a chunk shares two big matrix
+Feature selection: the 15 static features and the 3 calibration features
+are always in; ALL 4,096 subsets of the 12 variable features are trained on
+a train split and compete on a validation split (batched - every subset in a chunk shares two big matrix
 multiplies per iteration, with inactive columns zero-masked, which is exactly
 equivalent to training each subset alone). The winner is retrained on
 train+validation and reported on an untouched test split. style.json carries
-{features:"v5", active:[...canonical indices...], weights:[...], extras:[names]}
+{features:"v8", active:[...canonical indices...], weights:[...], extras:[names]}
 so the browser can score exactly the chosen subset.
 
 Stability: the incumbent subset (read from docs/style.json) keeps its seat
@@ -67,8 +71,13 @@ MIN_PLY = 8
 MULTIPV = 10  # a contract with docs/app.js, like DEPTH - same pool at play time
 DEPTH = 5  # a contract with docs/app.js - candidates must come from the same search
 N_CANON = 30
-BASE = list(range(15))
-EXTRAS = list(range(15, 30))
+# CALIBRATION FEATURES (20 king-walk, 22 edge-pawn, 24 bad-capture) are
+# ALWAYS ON: they suppress the sampled probability of moves Andrew rarely or
+# never plays, which top-1 accuracy cannot measure - subset selection
+# systematically undervalues rare-event calibration, so they are exempt
+CALIBRATION = [20, 22, 24]
+BASE = list(range(15)) + CALIBRATION
+EXTRAS = [i for i in range(15, 30) if i not in CALIBRATION]
 CHUNK = 1024  # subsets trained per batched fit
 SWITCH_MARGIN = 0.0025
 PIECE_VALUES = {1: 1, 2: 3, 3: 3, 4: 5, 5: 9, 6: 0}
@@ -105,9 +114,9 @@ def engine_cmd():
 ENGINE_CMD, ENGINE_TAG = engine_cmd()
 
 EXTRA_NAMES = {15: "retreat", 16: "same-piece", 17: "recapture",
-               18: "from-attacked", 19: "to-attacked", 20: "king-dist",
-               21: "capture-defended", 22: "defended-to", 23: "back-rank",
-               24: "undo-move", 25: "hangs-piece", 26: "leaves-hanging",
+               18: "from-attacked", 19: "to-attacked", 20: "king-walk",
+               21: "capture-defended", 22: "edge-pawn", 23: "back-rank",
+               24: "bad-capture", 25: "hangs-piece", 26: "leaves-hanging",
                27: "loses-exchange", 28: "mover-value", 29: "sharp-loss"}
 NAME_TO_EXTRA = {v: k for k, v in EXTRA_NAMES.items()}
 
@@ -120,6 +129,19 @@ def cheb(a, b):
 def material(board, color):
     return sum(PIECE_VALUES[p.piece_type]
                for p in board.piece_map().values() if p.color == color)
+
+
+def en_prise(board, sq, owner):
+    """Attacked and (undefended, or the cheapest attacker is worth less than
+    the piece) - the value-aware sense in which a defended queen still hangs
+    to a knight."""
+    attackers = board.attackers(not owner, sq)
+    if not attackers:
+        return False
+    if not board.is_attacked_by(owner, sq):
+        return True
+    victim = PIECE_VALUES[board.piece_type_at(sq)]
+    return min(PIECE_VALUES[board.piece_type_at(a)] for a in attackers) < victim
 
 
 def features(board, move, cp_gap_pawns, rank,
@@ -152,23 +174,22 @@ def features(board, move, cp_gap_pawns, rank,
     to_att = board.is_attacked_by(not board.turn, move.to_square)
     x[18] = 1.0 if from_att else 0.0
     x[19] = 1.0 if to_att else 0.0
-    ek = board.king(not board.turn)
-    if ek is not None:
-        x[20] = cheb(move.to_square, ek) / 7.0
+    x[20] = 1.0 if (mover == chess.KING and x[5] == 0.0 and
+                    board.has_castling_rights(board.turn) and
+                    not board.is_check()) else 0.0
     x[21] = 1.0 if is_cap and to_att else 0.0
     x[23] = 1.0 if (fr == 0 if white else fr == 7) else 0.0
-    x[24] = 1.0 if (prev_my_to is not None and prev_my_to == move.from_square and
-                    prev_my_from is not None and prev_my_from == move.to_square) else 0.0
-    # post-move facts: defense of the landed piece, and what got left en prise
-    me, opp = board.turn, not board.turn
+    x[24] = x[2] * x[0]
+    x[22] = 1.0 if (mover == chess.PAWN and not is_cap and
+                    chess.square_file(move.from_square) in (0, 7)) else 0.0
+    # post-move facts: what got hung, and what got left en prise (value-aware)
+    me = board.turn
     board.push(move)
-    defended = board.is_attacked_by(me, move.to_square)
-    x[22] = 1.0 if defended else 0.0
-    x[25] = 1.0 if (board.is_attacked_by(opp, move.to_square) and not defended) else 0.0
+    x[25] = 1.0 if en_prise(board, move.to_square, me) else 0.0
     for sq, p in board.piece_map().items():
         if (p.color == me and sq != move.to_square and
                 p.piece_type in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN) and
-                board.is_attacked_by(opp, sq) and not board.is_attacked_by(me, sq)):
+                en_prise(board, sq, me)):
             x[26] = 1.0
             break
     board.pop()
@@ -232,7 +253,8 @@ def get_examples():
             os.path.getmtime(EX_CACHE) > os.path.getmtime(CACHE)):
         d = json.load(open(EX_CACHE))
         if (d.get("fmt") == "c30" and d.get("engine") == ENGINE_TAG
-                and d.get("depth") == DEPTH and d.get("multipv") == MULTIPV):
+                and d.get("depth") == DEPTH and d.get("multipv") == MULTIPV
+                and d.get("contract") == "v8"):
             print(f"examples cache hit: {len(d['examples'])} examples")
             return d["examples"]
     if not ENGINE_CMD:
@@ -244,7 +266,8 @@ def get_examples():
     with chess.engine.SimpleEngine.popen_uci(ENGINE_CMD) as engine:
         examples = collect_examples(games, engine)
     json.dump({"fmt": "c30", "engine": ENGINE_TAG, "depth": DEPTH,
-               "multipv": MULTIPV, "examples": examples}, open(EX_CACHE, "w"))
+               "multipv": MULTIPV, "contract": "v8", "examples": examples},
+              open(EX_CACHE, "w"))
     return examples
 
 
@@ -342,7 +365,7 @@ def incumbent_extras():
         cur = json.load(open(OUT))
     except (FileNotFoundError, json.JSONDecodeError):
         return None
-    if cur.get("features") not in ("v4", "v5"):
+    if cur.get("features") not in ("v4", "v5", "v6", "v7", "v8"):
         return None
     names = cur.get("extras", [])
     if not all(n in NAME_TO_EXTRA for n in names):
@@ -413,7 +436,7 @@ def main():
           f"engine-best {engine_test:.2%} ({int(test_m.sum())} examples)")
 
     json.dump({
-        "features": "v5",
+        "features": "v8",
         "active": cols,
         "weights": [round(float(x), 5) for x in w.tolist()],
         "extras": [EXTRA_NAMES[i] for i in sorted(chosen_combo)],
