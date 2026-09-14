@@ -33,8 +33,12 @@ A chess bot that plays like me — built from every game I've played on
   a couple of moves ahead, so the bot does too. At play time a salience guard
   (mirrored in `audit.py`) drops candidates the aggregate model can't judge:
   moves that ignore the threat the opponent just made, voluntary king-walks,
-  purposeless edge-pawn pushes (no kick, no square an enemy minor eyes,
-  no luft, no storm, queens still on), and — while the position is still
+  purposeless edge-pawn pushes (queens still on, and the push kicks nothing
+  off the square it now attacks, defends nothing, is no passer and no storm
+  at their king — measured: I kick a bishop that is already there 17% of the
+  time, but push prophylactically to stop one arriving 1.8%, against a 0.7%
+  baseline for admittedly aimless pushes, and I air out my own castled king
+  0.4% of the time, which is *below* that baseline), and — while the position is still
   healthy — outright howlers (2.5+ pawns worse than the engine's best;
   once already lost, the tail stays, because that is when I flail too).
   Each survives only as the engine's #1. And when a near-best capture of a

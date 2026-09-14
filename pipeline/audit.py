@@ -42,8 +42,8 @@ def book_key(board):
 
 def aimless_edge(board, move):
     """Mirrors aimlessEdgePawn in docs/app.js: a quiet edge-pawn push with no
-    job (no kick, no coverage an enemy minor eyes, defends nothing, not a
-    passer, no luft, no storm) while the queens are still on."""
+    job (kicks nothing off the square it now attacks, defends nothing, not a
+    passer, no storm at their king) while the queens are still on."""
     me = board.turn
     if not (board.pieces(chess.QUEEN, chess.WHITE) and board.pieces(chess.QUEEN, chess.BLACK)):
         return False
@@ -67,16 +67,12 @@ def aimless_edge(board, move):
                 return False  # kicks an enemy piece
             if pc and pc.color == me and board.attackers(not me, sq):
                 return False  # defends an attacked friend
-        for sq in chess.scan_forward(pawn_atk):
-            if not board.piece_at(sq):
-                for a in board.attackers(not me, sq):
-                    if board.piece_at(a).piece_type in (chess.KNIGHT, chess.BISHOP):
-                        return False  # prophylaxis
+        # no prophylaxis exemption (covering a square an enemy minor merely eyes
+        # is available in 29% of his positions and he takes it 1.8% of the time,
+        # against 0.7% for admittedly aimless pushes) and no luft exemption (a
+        # step in front of his own castled king: available 10%, played 0.4% -
+        # BELOW the aimless baseline, because it weakens the king it "helps")
         my_k, opp_k = board.king(me), board.king(not me)
-        single = abs(tr - chess.square_rank(move.from_square)) == 1
-        if single and my_k is not None and abs(chess.square_file(my_k) - ff) <= 2 and \
-                chess.square_rank(my_k) == (0 if me == chess.WHITE else 7):
-            return False  # luft
         if opp_k is not None and my_k is not None and \
                 abs(chess.square_file(opp_k) - ff) <= 2 and abs(chess.square_file(my_k) - ff) >= 3:
             return False  # pawn storm at their king

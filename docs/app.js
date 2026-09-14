@@ -507,17 +507,15 @@ function aimlessEdgePawn(played, pf) {
     const p = chess.get(sq)
     if (p && p.color === opp) return false // kicks an enemy piece
     if (p && p.color === me && chess.attackers(sq, opp).length) return false // defends it
-    if (!p) {
-      for (const a of chess.attackers(sq, opp)) {
-        const ap = chess.get(a)
-        if (ap && (ap.type === "n" || ap.type === "b")) return false // prophylaxis
-      }
-    }
   }
+  // NO prophylaxis exemption: covering a square an enemy minor merely EYES is
+  // available in 29% of my positions and I take it 1.8% of the time - barely
+  // above the 0.7% I spend on admittedly aimless pushes. I kick a bishop that
+  // is ALREADY there 17% of the time; preventing arrivals is not my game.
+  // NO luft exemption either: a single step in front of my own castled king is
+  // available in 10% of positions and I play it 0.4% of the time - BELOW the
+  // aimless baseline, because it airs out the king it pretends to help.
   const kf = s => s.charCodeAt(0) - 97
-  const single = Math.abs(tr - (played.from.charCodeAt(1) - 49)) === 1
-  if (single && myK && Math.abs(kf(myK) - pf) <= 2 &&
-      myK.charCodeAt(1) - 49 === (me === "w" ? 0 : 7)) return false // luft
   if (oppK && myK && Math.abs(kf(oppK) - pf) <= 2 &&
       Math.abs(kf(myK) - pf) >= 3) return false // pawn storm at their king
   return true
