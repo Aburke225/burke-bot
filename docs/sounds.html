@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Burke Bot — sound tasting</title>
+<style>
+  body { background: #162117; color: #edf1e4; font: 15px/1.5 "IBM Plex Mono", ui-monospace, monospace; margin: 0; padding: 2rem 1.2rem; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 0.3rem; }
+  p.sub { color: #aab8a5; margin: 0 0 1.6rem; font-size: 0.85rem; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.9rem; }
+  .group { background: #1e2b1f; border: 1px solid #3a4f3c; border-radius: 10px; padding: 0.9rem; }
+  .group h2 { font-size: 0.95rem; margin: 0 0 0.15rem; color: #8fc57f; }
+  .group p { font-size: 0.72rem; color: #aab8a5; margin: 0 0 0.7rem; min-height: 2.8em; }
+  button { display: block; width: 100%; margin: 0.3rem 0; padding: 0.45rem 0.6rem; font: inherit; font-size: 0.8rem;
+           background: #26362a; color: #edf1e4; border: 1px solid #3a4f3c; border-radius: 7px; cursor: pointer; }
+  button:hover { border-color: #8fc57f; }
+  button.rally { margin-top: 0.7rem; background: #2e4232; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sound tasting</h1>
+  <p class="sub">Four candidate sound sets for Burke Bot's pieces. Group A is what's live right now. Click around, pick a winner.</p>
+  <div class="groups" id="groups"></div>
+</div>
+<script>
+let ctx = null
+const ac = () => ctx || (ctx = new (window.AudioContext || window.webkitAudioContext)())
+
+function tock(freqs, weights, gain, when = 0, tau = 0.004, dur = 0.05) {
+  const c = ac(), t = c.currentTime + when
+  const len = Math.floor(c.sampleRate * dur)
+  const attack = Math.max(1, Math.floor(c.sampleRate * 0.001))
+  const buf = c.createBuffer(1, len, c.sampleRate)
+  const d = buf.getChannelData(0)
+  const wsum = weights.reduce((a, b) => a + b, 0)
+  for (let i = 0; i < len; i++) {
+    const ts = i / c.sampleRate
+    const env = Math.min(1, i / attack) * Math.exp(-ts / tau)
+    let v = 0
+    for (let j = 0; j < freqs.length; j++) v += weights[j] * Math.sin(2 * Math.PI * freqs[j] * ts)
+    d[i] = (v / wsum) * env
+  }
+  const s = c.createBufferSource(); s.buffer = buf
+  const g = c.createGain(); g.gain.value = gain
+  s.connect(g); g.connect(c.destination)
+  s.start(t)
+}
+
+// each group scales the measured chess.com-like base (group A) a different way
+function makeGroup(fMul, tMul, gMul, partials) {
+  const F = a => a.slice(0, partials).map(x => Math.round(x * fMul))
+  const W = a => a.slice(0, partials)
+  return {
+    move: (w = 0) => tock(F([460, 900, 1280]), W([0.75, 1, 0.4]), 0.5 * gMul, w, 0.004 * tMul),
+    capture: (w = 0) => tock(F([630, 1250, 1470]), W([0.95, 1, 0.7]), 0.6 * gMul, w, 0.005 * tMul, 0.06),
+    castle: (w = 0) => { tock(F([200, 420, 750]), W([1, 0.75, 0.6]), 0.5 * gMul, w, 0.005 * tMul, 0.06)
+                         tock(F([230, 460, 780]), W([1, 0.75, 0.6]), 0.5 * gMul, w + 0.09, 0.005 * tMul, 0.06) },
+    check: (w = 0) => tock(F([980, 1400, 2900]), W([1, 0.6, 0.45]), 0.55 * gMul, w, 0.006 * tMul, 0.07),
+  }
+}
+
+const GROUPS = [
+  ["A — measured (live now)", "tuned to match chess.com's spectra: tones near 460+900Hz, gone in ~20ms", makeGroup(1, 1, 1, 3)],
+  ["B — warmer", "same shape, pitched down a quarter and allowed to breathe slightly longer. woodier", makeGroup(0.75, 1.3, 1.05, 3)],
+  ["C — brighter", "pitched up and damped faster. lighter, closer to lacquered pieces", makeGroup(1.2, 0.85, 0.95, 3)],
+  ["D — muted", "two partials only, killed quickly and a touch quieter. driest of the four", makeGroup(0.9, 0.7, 0.85, 2)],
+]
+
+const root = document.getElementById("groups")
+for (const [title, desc, g] of GROUPS) {
+  const div = document.createElement("div")
+  div.className = "group"
+  const h = document.createElement("h2"); h.textContent = title; div.appendChild(h)
+  const p = document.createElement("p"); p.textContent = desc; div.appendChild(p)
+  for (const kind of ["move", "capture", "castle", "check"]) {
+    const b = document.createElement("button")
+    b.textContent = kind
+    b.addEventListener("click", () => { ac().resume(); g[kind]() })
+    div.appendChild(b)
+  }
+  const rally = document.createElement("button")
+  rally.className = "rally"
+  rally.textContent = "play a rally"
+  rally.addEventListener("click", () => {
+    ac().resume()
+    g.move(0); g.move(0.5); g.capture(1.0); g.move(1.5); g.castle(2.0); g.move(2.6); g.check(3.1)
+  })
+  div.appendChild(rally)
+  root.appendChild(div)
+}
+</script>
+</body>
+</html>

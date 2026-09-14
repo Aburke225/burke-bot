@@ -235,6 +235,48 @@ function playMoveSound(m) {
   else sfx.move()
 }
 
+// ---------- opening detection (lichess openings data, my own record) ----------
+
+let openingsMap = null      // book-style position key -> opening name
+let openingStats = {}       // family -> {n, w, d, l} from my real games
+let announcedFamilies = new Set()
+let pendingOpeningRemark = null
+
+// called after every move: the deepest named position seen so far names the
+// opening, and the first time a family appears the bot gets one remark to make
+function noteOpening() {
+  if (!openingsMap) return
+  const name = openingsMap[bookKey(chess.fen())]
+  if (!name) return
+  const family = name.split(":")[0].trim()
+  if (announcedFamilies.has(family)) return
+  announcedFamilies.add(family)
+  pendingOpeningRemark = openingRemark(name, family)
+}
+
+function openingRemark(name, family) {
+  const s = openingStats[family]
+  if (!s || !s.n) return "the " + name + "? That one's off my map — I'll be improvising soon."
+  const n = s.n
+  const pct = Math.round(100 * (s.w + s.d / 2) / n)
+  const games = n === 1 ? "1 game" : n + " games"
+  if (n >= 8 && pct >= 55) return "the " + name + "! One of my favorites — " + games + " and a " + pct + "% score."
+  if (n >= 8 && pct <= 42) return "the " + name + "... " + pct + "% for me lifetime. Today we fix that."
+  if (n >= 4) return "the " + name + " — " + games + ", " + pct + "% score for me."
+  return "the " + name + " — only " + games + " of mine, but I know the ideas."
+}
+
+function takeOpeningRemark() {
+  const r = pendingOpeningRemark
+  pendingOpeningRemark = null
+  return r
+}
+
+function resetOpening() {
+  announcedFamilies = new Set()
+  pendingOpeningRemark = null
+}
+
 // ---------- history browsing (arrow keys, like chess.com) ----------
 
 let viewPly = -1  // -1 = the live position; otherwise "position after ply N"
@@ -529,6 +571,7 @@ function captureGame(result) {
 
 async function botMove(board, id) {
   if (chess.isGameOver()) { finishAuto(); return }
+  noteOpening()  // the user's move may have entered a named opening
   setStatus("thinking", "thinking", "…")
   updateEval(chess.fen())
   const started = Date.now()
@@ -563,17 +606,29 @@ async function botMove(board, id) {
   renderMoves()
   if (chess.isGameOver()) { finishAuto(); return }
   updateEval(chess.fen())
+  noteOpening()  // ...and so may the bot's reply
 
   if (source) {
-    const pct = Math.round(100 * (source.wins + source.draws / 2) / source.n)
-    const times = source.n === 1 ? "once before" : source.n + " of " + source.total + " times"
-    setStatus("book", "book move", played.san + " — I've played this here " + times + " (" + pct + "% score with it). Your move." + checkNote())
+    const remark = takeOpeningRemark()
+    if (remark) {
+      setStatus("book", "book move", played.san + " — " + remark + " Your move." + checkNote())
+    } else {
+      const pct = Math.round(100 * (source.wins + source.draws / 2) / source.n)
+      const times = source.n === 1 ? "once before" : source.n + " of " + source.total + " times"
+      setStatus("book", "book move", played.san + " — I've played this here " + times + " (" + pct + "% score with it). Your move." + checkNote())
+    }
   } else {
     if (inBook) {
+      // the leaving-book line wins; a pending opening remark keeps for the next move
       inBook = false
       setStatus("engine", "on my own", played.san + " — we've left my games, so I'm thinking for myself now. Your move." + checkNote())
     } else {
-      setStatus("engine", "on my own", played.san + ". Your move." + checkNote())
+      const remark = takeOpeningRemark()
+      if (remark) {
+        setStatus("engine", "on my own", played.san + " — " + remark + " Your move." + checkNote())
+      } else {
+        setStatus("engine", "on my own", played.san + ". Your move." + checkNote())
+      }
     }
   }
   board.enableMoveInput(inputHandler, botColor === "w" ? COLOR.black : COLOR.white)
@@ -733,6 +788,7 @@ function newGame(userColor) {
   stdStart = true
   chess = new Chess()
   inBook = true
+  resetOpening()
   botColor = userColor === "w" ? "b" : "w"
   renderMoves()
   boardRef.disableMoveInput()
@@ -771,11 +827,16 @@ function renderStats(stats) {
 // ---------- boot ----------
 
 async function boot() {
-  const [bookRes, statsRes, styleRes] = await Promise.all([
+  const [bookRes, statsRes, styleRes, openingsRes] = await Promise.all([
     fetch("book.json"), fetch("stats.json"), fetch("style.json?v=4").catch(() => null),
+    fetch("openings.json").catch(() => null),
   ])
   book = await bookRes.json()
   const stats = await statsRes.json()
+  openingStats = stats.opening_stats || {}
+  try {
+    if (openingsRes && openingsRes.ok) openingsMap = await openingsRes.json()
+  } catch (e) { openingsMap = null }
   try {
     if (styleRes && styleRes.ok) styleModel = await styleRes.json()
   } catch (e) { styleModel = null }
@@ -849,6 +910,7 @@ async function boot() {
       stdStart = false
       chess = new Chess(fen)
       inBook = false
+      resetOpening()
       botColor = userColor === "w" ? "b" : "w"
       document.getElementById("pick").hidden = true
       document.getElementById("end").hidden = true

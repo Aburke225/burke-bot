@@ -111,6 +111,23 @@ def main():
     manual = list(manual_games())
     print(f"api rapid games: {len(sources)}, manual games: {len(manual)}")
 
+    # named openings (lichess chess-openings data, CC0), keyed like the book -
+    # the site detects the opening live and quotes my record with it, so the
+    # stats here MUST come from the same map the frontend uses
+    openings_path = os.path.join(WEB_DIR, "openings.json")
+    openings = {}
+    if os.path.exists(openings_path):
+        with open(openings_path) as f:
+            openings = json.load(f)
+    opening_stats = collections.defaultdict(lambda: {"n": 0, "w": 0, "d": 0, "l": 0})
+
+    def note_opening_result(name, result):
+        if not name or result not in ("w", "d", "l"):
+            return
+        fam = name.split(":")[0].strip()
+        opening_stats[fam]["n"] += 1
+        opening_stats[fam][result] += 1
+
     book = collections.defaultdict(dict)  # key -> uci -> stats
     stats = {
         "username": "Burkeley",
@@ -173,6 +190,7 @@ def main():
                       "moves": [m.uci() for m in game.mainline_moves()]})
 
         board = game.board()
+        game_opening = None
         for ply, move in enumerate(game.mainline_moves()):
             if ply >= MAX_BOOK_PLY:
                 break
@@ -189,6 +207,8 @@ def main():
                 board.push(move)
             except (ValueError, AssertionError):
                 break
+            game_opening = openings.get(book_key(board), game_opening)
+        note_opening_result(game_opening, result)
 
     stats["openings_white"] = stats["openings_white"].most_common(6)
     stats["openings_black"] = stats["openings_black"].most_common(6)
@@ -214,6 +234,7 @@ def main():
             stats["wins" if result == "w" else "losses" if result == "l" else "draws"] += 1
             cache.append({"color": g["color"], "moves": moves})
             board = chess.Board()
+            game_opening = None
             for ply, uci in enumerate(moves):
                 try:
                     move = chess.Move.from_uci(uci)
@@ -230,6 +251,9 @@ def main():
                     entry["n"] += 1
                     entry[result] += 1
                 board.push(move)
+                if ply < MAX_BOOK_PLY:
+                    game_opening = openings.get(book_key(board), game_opening)
+            note_opening_result(game_opening, result)
         print(f"site games ingested: {stats['site_games']}")
 
     # performance rating vs the chess.com bots (their scale runs hotter than
@@ -242,6 +266,8 @@ def main():
         stats["bot_scale_strength"] = int(round((avg - 400 * math.log10(1 / s - 1)) / 5) * 5)
     else:
         stats["bot_scale_strength"] = None
+
+    stats["opening_stats"] = dict(opening_stats)
 
     os.makedirs(WEB_DIR, exist_ok=True)
     with open(os.path.join(WEB_DIR, "book.json"), "w") as f:

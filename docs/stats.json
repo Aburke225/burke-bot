@@ -8,6 +8,260 @@
   "last_game": "2025-12-20",
   "losses": 171,
   "manual_games": 30,
+  "opening_stats": {
+    "Alekhine Defense": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Bird Opening": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Bishop's Opening": {
+      "d": 0,
+      "l": 1,
+      "n": 2,
+      "w": 1
+    },
+    "Blackmar-Diemer Gambit Declined": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Caro-Kann Defense": {
+      "d": 2,
+      "l": 3,
+      "n": 9,
+      "w": 4
+    },
+    "Center Game": {
+      "d": 0,
+      "l": 1,
+      "n": 1,
+      "w": 0
+    },
+    "Dutch Defense": {
+      "d": 0,
+      "l": 5,
+      "n": 8,
+      "w": 3
+    },
+    "English Defense": {
+      "d": 0,
+      "l": 3,
+      "n": 4,
+      "w": 1
+    },
+    "English Opening": {
+      "d": 0,
+      "l": 2,
+      "n": 2,
+      "w": 0
+    },
+    "Englund Gambit": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Englund Gambit Declined": {
+      "d": 0,
+      "l": 1,
+      "n": 1,
+      "w": 0
+    },
+    "Four Knights Game": {
+      "d": 0,
+      "l": 3,
+      "n": 6,
+      "w": 3
+    },
+    "French Defense": {
+      "d": 0,
+      "l": 8,
+      "n": 15,
+      "w": 7
+    },
+    "Horwitz Defense": {
+      "d": 0,
+      "l": 1,
+      "n": 3,
+      "w": 2
+    },
+    "Hungarian Opening": {
+      "d": 0,
+      "l": 3,
+      "n": 5,
+      "w": 2
+    },
+    "Indian Defense": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Italian Game": {
+      "d": 0,
+      "l": 1,
+      "n": 3,
+      "w": 2
+    },
+    "King's Gambit Declined": {
+      "d": 2,
+      "l": 0,
+      "n": 2,
+      "w": 0
+    },
+    "King's Knight Opening": {
+      "d": 0,
+      "l": 1,
+      "n": 3,
+      "w": 2
+    },
+    "King's Pawn Game": {
+      "d": 1,
+      "l": 7,
+      "n": 18,
+      "w": 10
+    },
+    "Modern Defense": {
+      "d": 0,
+      "l": 2,
+      "n": 2,
+      "w": 0
+    },
+    "Nimzowitsch Defense": {
+      "d": 0,
+      "l": 3,
+      "n": 8,
+      "w": 5
+    },
+    "Old Indian Defense": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Owen Defense": {
+      "d": 1,
+      "l": 13,
+      "n": 26,
+      "w": 12
+    },
+    "Petrov's Defense": {
+      "d": 0,
+      "l": 7,
+      "n": 10,
+      "w": 3
+    },
+    "Philidor Defense": {
+      "d": 0,
+      "l": 8,
+      "n": 15,
+      "w": 7
+    },
+    "Pirc Defense": {
+      "d": 0,
+      "l": 7,
+      "n": 11,
+      "w": 4
+    },
+    "Queen's Gambit Accepted": {
+      "d": 0,
+      "l": 3,
+      "n": 4,
+      "w": 1
+    },
+    "Queen's Gambit Declined": {
+      "d": 0,
+      "l": 12,
+      "n": 14,
+      "w": 2
+    },
+    "Queen's Pawn Game": {
+      "d": 0,
+      "l": 4,
+      "n": 16,
+      "w": 12
+    },
+    "Rapport-Jobava System, with e6": {
+      "d": 0,
+      "l": 1,
+      "n": 1,
+      "w": 0
+    },
+    "Rat Defense": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Ruy Lopez": {
+      "d": 0,
+      "l": 2,
+      "n": 8,
+      "w": 6
+    },
+    "Scandinavian Defense": {
+      "d": 0,
+      "l": 10,
+      "n": 22,
+      "w": 12
+    },
+    "Scotch Game": {
+      "d": 2,
+      "l": 19,
+      "n": 41,
+      "w": 20
+    },
+    "Sicilian Defense": {
+      "d": 4,
+      "l": 28,
+      "n": 58,
+      "w": 26
+    },
+    "Slav Defense": {
+      "d": 0,
+      "l": 1,
+      "n": 2,
+      "w": 1
+    },
+    "St. George Defense": {
+      "d": 0,
+      "l": 0,
+      "n": 1,
+      "w": 1
+    },
+    "Three Knights Opening": {
+      "d": 0,
+      "l": 0,
+      "n": 2,
+      "w": 2
+    },
+    "Van't Kruijs Opening": {
+      "d": 0,
+      "l": 5,
+      "n": 7,
+      "w": 2
+    },
+    "Vienna Game": {
+      "d": 1,
+      "l": 3,
+      "n": 5,
+      "w": 1
+    },
+    "Zukertort Opening": {
+      "d": 0,
+      "l": 3,
+      "n": 3,
+      "w": 0
+    }
+  },
   "openings_black": [
     [
       "Owens Defense",
