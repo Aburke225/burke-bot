@@ -610,11 +610,14 @@ function stylePick(lines) {
     let z = 0
     for (let j = 0; j < w.length; j++) z += w[j] * x[act[j]]
     // salience guard: the aggregate model can't know a threat is FRESH,
-    // voluntary king-walks are a 1-in-175 event for me, and purposeless
-    // edge-pawn pushes a 1-in-300 one - candidates that do any of these
+    // voluntary king-walks are a 1-in-175 event for me, purposeless
+    // edge-pawn pushes a 1-in-300 one, and in a healthy position I play a
+    // 2.5-pawn howler on only 2% of moves (when already lost I flail like
+    // anyone, so the tail stays there) - candidates that do any of these
     // only survive as the engine's #1 (deep tactics earn respect)
     scored.push({ uci: cands[i].uci, z,
-                  guarded: x.ignoresFresh || x.aimlessEdge || x[20] === 1,
+                  guarded: x.ignoresFresh || x.aimlessEdge || x[20] === 1 ||
+                           (best > -200 && best - cands[i].cp >= 250),
                   // a queen hanging to a lesser piece is the one thing I see
                   // every time - a near-best grab of one (within half a pawn
                   // of the engine's #1) makes every non-grab candidate guarded
@@ -622,9 +625,10 @@ function stylePick(lines) {
                         best - cands[i].cp <= 50 })
   }
   if (scored.length < 2) return null
+  // rank-0 always survives, so the pool is never empty; a singleton pool
+  // (forced spot: everything else guarded) just plays the engine's #1
   const hasGrab = scored.some(c => c.grab)
-  const clean = scored.filter((c, i) => i === 0 || (hasGrab ? c.grab : !c.guarded))
-  const pool = clean.length >= 2 || hasGrab ? clean : scored
+  const pool = scored.filter((c, i) => i === 0 || (hasGrab ? c.grab : !c.guarded))
   const zmax = Math.max(...pool.map(c => c.z))
   let total = 0
   for (const c of pool) { c.p = Math.exp((c.z - zmax) / PLAY_TEMP); total += c.p }

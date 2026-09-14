@@ -256,10 +256,11 @@ def profile_bot(engine, n_games):
                 if grabs:
                     keep = sorted(set([0] + grabs))
                 else:
-                    keep = [i for i, (c, _, x) in enumerate(cands)
-                            if i == 0 or not guarded(c, x)]
-                    if len(keep) < 2:
-                        keep = list(range(len(cands)))
+                    # tail guard: in a healthy position, howlers (>=250cp) are
+                    # out; rank-0 always survives so keep is never empty
+                    keep = [i for i, (c, cp, x) in enumerate(cands)
+                            if i == 0 or ((best_cp <= -200 or best_cp - cp < 250)
+                                          and not guarded(c, x))]
                 z = np.array([float(np.dot(w, [cands[i][2][j] for j in active])) for i in keep])
                 z = z / PLAY_TEMP  # keep in sync with PLAY_TEMP in docs/app.js
                 p = np.exp(z - z.max()); p /= p.sum()

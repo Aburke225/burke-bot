@@ -33,11 +33,14 @@ A chess bot that plays like me — built from every game I've played on
   a couple of moves ahead, so the bot does too. At play time a salience guard
   (mirrored in `audit.py`) drops candidates the aggregate model can't judge:
   moves that ignore the threat the opponent just made, voluntary king-walks,
-  and purposeless edge-pawn pushes (no kick, no square an enemy minor eyes,
-  no luft, no storm, queens still on) — each survives only as the engine's
-  #1. And when a near-best capture of a queen by a lesser piece exists, the
-  bot takes it: that is the one thing I see every time. If the model fails
-  to load, a strength-capped engine (skill 4) takes over instead.
+  purposeless edge-pawn pushes (no kick, no square an enemy minor eyes,
+  no luft, no storm, queens still on), and — while the position is still
+  healthy — outright howlers (2.5+ pawns worse than the engine's best;
+  once already lost, the tail stays, because that is when I flail too).
+  Each survives only as the engine's #1. And when a near-best capture of a
+  queen by a lesser piece exists, the bot takes it: that is the one thing
+  I see every time. If the model fails to load, a strength-capped engine
+  (skill 4) takes over instead.
 - Games played against the bot on the site (only mine, flagged by sign-in)
   are captured and folded back in.
 - A daily GitHub Action checks for new games and, only when it finds any,
