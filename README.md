@@ -15,11 +15,16 @@ A chess bot that plays like me — built from every game I've played on
 - While the game is inside that book, the bot samples its move from my real
   frequencies — if I play 1. e4 87% of the time, so does the bot.
 - Once the game leaves my games, Stockfish 18 (the lite single-threaded WASM
-  build, vendored) proposes its top 5 moves and a style model picks among
+  build, vendored) proposes its top 10 moves and a style model picks among
   them: a conditional logit trained on my games via behavior cloning
-  (`pipeline/train_style.py`). The trainer analyses with that same vendored
-  engine, run headless through node — training and play always agree on how
-  candidate moves rank, and upgrading the vendored engine upgrades both.
+  (`pipeline/train_style.py`). Ten candidates - not five - so genuinely bad,
+  human moves are in the pool, and the variable features include
+  mistake-shaped ones (hangs the piece, leaves one hanging, loses the
+  exchange) so the model can learn my blunder tendencies, not just my taste.
+  The trainer analyses with that same vendored engine, run headless through
+  node — training and play always agree on how candidate moves rank, and
+  upgrading the vendored engine upgrades both. `pipeline/audit.py` compares
+  my mistake profile with the bot's across self-play games.
   Every candidate move scores 30 features — 15 static ones that are always
   on, and 15 variable ones where the trainer tries all 32,768 subsets and
   keeps whichever predicts my moves best on held-out games (with a switching

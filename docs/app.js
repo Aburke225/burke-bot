@@ -78,10 +78,11 @@ const engine = (() => {
   return {
     ready,
     // with the style model in charge of humanness, search runs clean:
-    // full strength, five candidate lines for the model to choose among
+    // full strength, TEN candidate lines for the model to choose among -
+    // wide enough to include the genuinely bad moves a human would play
     useMultipv() {
       worker.postMessage("setoption name Skill Level value 20")
-      worker.postMessage("setoption name MultiPV value 5")
+      worker.postMessage("setoption name MultiPV value 10")
     },
     bestMove(fen) {
       const run = () => new Promise(res => {
@@ -238,7 +239,7 @@ const sfx = (() => {
     move() { tock([460, 900, 1280], [0.75, 1, 0.4], 0.5) },
     capture() { tock([473, 938, 1103], [0.95, 1, 0.7], 0.63, 0, 0.0065, 0.06) },
     castle() { tock([200, 420, 750], [1, 0.75, 0.6], 0.5, 0, 0.005, 0.06); tock([230, 460, 780], [1, 0.75, 0.6], 0.5, 0.09, 0.005, 0.06) },
-    check() { tock([882, 1260], [1, 0.6], 0.55, 0, 0.0042, 0.07) },
+    check() { tock([882, 1260], [1, 0.6], 0.63, 0, 0.0042, 0.07) },
     promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
     start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
     end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
@@ -419,20 +420,16 @@ async function updateEval(fen) {
 const CHEB = (f1, r1, f2, r2) => Math.max(Math.abs(f1 - f2), Math.abs(r1 - r2))
 const PIECE_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
 
-// facts about the position that are the same for all five candidates
+// facts about the position that are the same for all candidates
 function decisionContext() {
   const hist = chess.history({ verbose: true })
   const oppLast = hist[hist.length - 1]
   const myLast = hist[hist.length - 2]
   const userColor = botColor === "w" ? "b" : "w"
   let ek = null
-  let botMat = 0, userMat = 0
   for (const row of chess.board()) {
     for (const sq of row) {
-      if (!sq) continue
-      if (sq.color === botColor) botMat += PIECE_VAL[sq.type]
-      else userMat += PIECE_VAL[sq.type]
-      if (sq.type === "k" && sq.color === userColor) ek = sq.square
+      if (sq && sq.type === "k" && sq.color === userColor) ek = sq.square
     }
   }
   const mineLast = myLast && myLast.color === botColor ? myLast : null
@@ -441,7 +438,7 @@ function decisionContext() {
     prevMyFrom: mineLast ? mineLast.from : null,
     prevOppCapTo: oppLast && oppLast.captured ? oppLast.to : null,
     ek,
-    ahead: botMat > userMat,
+    tension: Math.min(1, chess.moves({ verbose: true }).filter(m => m.captured).length / 10),
     userColor,
   }
 }
@@ -453,8 +450,21 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   const toAtt = chess.isAttacked(to, ctx.userColor) ? 1 : 0
   const played = tryMove({ from, to, promotion: uci.slice(4) || undefined })
   if (!played) return null
-  // the landing-square defense is judged with the move on the board
+  // post-move facts, judged with the move on the board
   const defended = chess.isAttacked(to, played.color) ? 1 : 0
+  const hangs = !defended && chess.isAttacked(to, ctx.userColor) ? 1 : 0
+  let leaves = 0
+  for (const row of chess.board()) {
+    for (const sq of row) {
+      if (!sq || sq.color !== played.color || sq.square === to) continue
+      if (sq.type === "p" || sq.type === "k") continue
+      if (chess.isAttacked(sq.square, ctx.userColor) && !chess.isAttacked(sq.square, played.color)) {
+        leaves = 1
+        break
+      }
+    }
+    if (leaves) break
+  }
   chess.undo()
   const x = new Array(30).fill(0)
   x[0] = Math.min(Math.max(cpGapPawns, 0), 5)
@@ -471,22 +481,22 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   if (played.captured) x[14] = PIECE_VAL[played.captured] / 9
   x[15] = (played.color === "w" ? tr < fr : tr > fr) ? 1 : 0
   x[16] = ctx.prevMyTo === from ? 1 : 0
+  x[17] = played.captured && ctx.prevOppCapTo === to ? 1 : 0
+  x[18] = fromAtt
+  x[19] = toAtt
   if (ctx.ek) {
     const ef = ctx.ek.charCodeAt(0) - 97, er = ctx.ek.charCodeAt(1) - 49
-    x[17] = CHEB(tf, tr, ef, er) < CHEB(ff, fr, ef, er) ? 1 : 0
-    x[24] = CHEB(tf, tr, ef, er) / 7
+    x[20] = CHEB(tf, tr, ef, er) / 7
   }
-  x[18] = played.captured && ctx.prevOppCapTo === to ? 1 : 0
-  x[19] = fromAtt
-  x[20] = toAtt
-  x[21] = played.captured && ctx.ahead ? 1 : 0
-  x[22] = CHEB(ff, fr, tf, tr) / 7
-  x[23] = (played.color === "w" ? tr >= 4 : tr <= 3) ? 1 : 0
-  x[25] = played.captured && toAtt ? 1 : 0
-  x[26] = fromAtt && !toAtt ? 1 : 0
-  x[27] = defended
-  x[28] = (played.color === "w" ? fr === 0 : fr === 7) ? 1 : 0
-  x[29] = ctx.prevMyTo === from && ctx.prevMyFrom === to ? 1 : 0
+  x[21] = played.captured && toAtt ? 1 : 0
+  x[22] = defended
+  x[23] = (played.color === "w" ? fr === 0 : fr === 7) ? 1 : 0
+  x[24] = ctx.prevMyTo === from && ctx.prevMyFrom === to ? 1 : 0
+  x[25] = hangs
+  x[26] = leaves
+  x[27] = played.captured && toAtt && PIECE_VAL[played.captured] < PIECE_VAL[played.piece] ? 1 : 0
+  x[28] = PIECE_VAL[played.piece] / 9
+  x[29] = x[0] * ctx.tension
   return x
 }
 
@@ -653,11 +663,11 @@ async function botMove(board, id) {
   if (source) {
     const remark = takeOpeningRemark()
     if (remark) {
-      setStatus("book", "book move", remark + " Your move." + checkNote())
+      setStatus("book", "from my games", remark + " Your move." + checkNote())
     } else {
       const pct = Math.round(100 * (source.wins + source.draws / 2) / source.n)
       const times = source.n === 1 ? "once before" : source.n + " of " + source.total + " times"
-      setStatus("book", "book move", "I've played this here " + times + " (" + pct + "% score with it). Your move." + checkNote())
+      setStatus("book", "from my games", "I've played this here " + times + " (" + pct + "% score with it). Your move." + checkNote())
     }
   } else if (inBook) {
     // the leaving-book line wins; a pending opening remark keeps for the next move
@@ -865,7 +875,7 @@ function renderStats(stats) {
 
 async function boot() {
   const [bookRes, statsRes, styleRes, openingsRes] = await Promise.all([
-    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=4").catch(() => null),
+    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=5").catch(() => null),
     fetch("openings.json").catch(() => null),
   ])
   book = await bookRes.json()
@@ -879,7 +889,7 @@ async function boot() {
   try {
     if (styleRes && styleRes.ok) styleModel = await styleRes.json()
   } catch (e) { styleModel = null }
-  const okModel = styleModel && styleModel.features === "v4" &&
+  const okModel = styleModel && styleModel.features === "v5" &&
     Array.isArray(styleModel.weights) && Array.isArray(styleModel.active) &&
     styleModel.active.length === styleModel.weights.length &&
     styleModel.active.every(i => Number.isInteger(i) && i >= 0 && i < 30)

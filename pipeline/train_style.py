@@ -3,24 +3,32 @@
 
 This is imitation learning (the specific method is behavior cloning): every
 position from his games past the opening becomes a training example -
-Stockfish proposes its top 5 moves, and the label is the one he actually
+Stockfish proposes its top 10 moves, and the label is the one he actually
 played. A conditional-logit model (softmax over per-move feature scores)
 learns his preferences; the browser ships the weights and samples from them.
 
-CANONICAL FEATURES (a CONTRACT with docs/app.js - change both or neither):
+CANONICAL FEATURES v5 (a CONTRACT with docs/app.js - change both or neither):
   --- 15 static features, always active ---
   0 cp_loss (pawns, clamped 0..5), 1 rank/4, 2 capture, 3 gives_check,
   4 promotion, 5 castle, 6..11 moved piece one-hot P N B R Q K,
   12 center distance (0..1), 13 forward, 14 capture value (victim/9),
   --- 15 variable features, competing for a seat ---
-  15 retreat, 16 same piece as my previous move, 17 toward the enemy king,
-  18 recapture, 19 from-square attacked, 20 to-square attacked (both judged
-  pre-move), 21 capture while ahead on material, 22 move distance (cheb/7),
-  23 destination in the enemy half, 24 destination's distance to the enemy
-  king (cheb/7), 25 capture of a defended piece, 26 escape (attacked piece
-  moves somewhere safe), 27 landing square defended (judged post-move),
-  28 from my back rank, 29 undo (same piece returns to where it just was).
-(No bias feature: softmax over a shared candidate set cancels any constant.)
+  15 retreat, 16 same piece as my previous move, 17 recapture,
+  18 from-square attacked, 19 to-square attacked (both judged pre-move),
+  20 destination's distance to the enemy king (cheb/7), 21 capture of a
+  defended piece, 22 landing square defended (judged post-move), 23 from my
+  back rank, 24 undo (same piece returns to where it just was),
+  --- the mistake-shaped five ---
+  25 hangs the moved piece (post-move: attacked and undefended), 26 leaves
+  another piece hanging (any own minor+ en prise post-move, landed square
+  excluded), 27 loses the exchange (captures a cheaper defended piece),
+  28 mover value (piece being risked /9), 29 sharp loss (cp_loss x position
+  tension - eval tolerance in messy positions).
+(No bias feature: softmax over a shared candidate set cancels any constant.
+ The pool is Stockfish's top TEN so genuinely bad, human moves are in it;
+ rank/4 therefore runs 0..2.25. Cut from earlier contracts after never or
+ rarely winning a seat: toward-king, capture-ahead, distance, enemy-half,
+ escape.)
 
 Feature selection: the 15 static features are always in; ALL 32,768 subsets
 of the 15 variable features are trained on a train split and compete on a
@@ -28,7 +36,7 @@ validation split (batched - every subset in a chunk shares two big matrix
 multiplies per iteration, with inactive columns zero-masked, which is exactly
 equivalent to training each subset alone). The winner is retrained on
 train+validation and reported on an untouched test split. style.json carries
-{features:"v4", active:[...canonical indices...], weights:[...], extras:[names]}
+{features:"v5", active:[...canonical indices...], weights:[...], extras:[names]}
 so the browser can score exactly the chosen subset.
 
 Stability: the incumbent subset (read from docs/style.json) keeps its seat
@@ -56,7 +64,7 @@ CACHE = os.path.join(REPO_ROOT, "pipeline", "games-cache.json")
 EX_CACHE = os.path.join(REPO_ROOT, "pipeline", "examples-cache.json")
 OUT = os.path.join(REPO_ROOT, "docs", "style.json")
 MIN_PLY = 8
-MULTIPV = 5
+MULTIPV = 10  # a contract with docs/app.js, like DEPTH - same pool at play time
 DEPTH = 5  # a contract with docs/app.js - candidates must come from the same search
 N_CANON = 30
 BASE = list(range(15))
@@ -96,14 +104,12 @@ def engine_cmd():
 
 ENGINE_CMD, ENGINE_TAG = engine_cmd()
 
-EXTRA_NAMES = {15: "retreat", 16: "same-piece", 17: "toward-king", 18: "recapture",
-               19: "from-attacked", 20: "to-attacked", 21: "capture-ahead",
-               22: "distance", 23: "enemy-half", 24: "king-dist",
-               25: "capture-defended", 26: "escape", 27: "defended-to",
-               28: "back-rank", 29: "undo-move"}
+EXTRA_NAMES = {15: "retreat", 16: "same-piece", 17: "recapture",
+               18: "from-attacked", 19: "to-attacked", 20: "king-dist",
+               21: "capture-defended", 22: "defended-to", 23: "back-rank",
+               24: "undo-move", 25: "hangs-piece", 26: "leaves-hanging",
+               27: "loses-exchange", 28: "mover-value", 29: "sharp-loss"}
 NAME_TO_EXTRA = {v: k for k, v in EXTRA_NAMES.items()}
-V3_NAMES = {14: "retreat", 15: "same-piece", 16: "toward-king", 17: "recapture",
-            18: "from-attacked", 19: "to-attacked", 20: "capture-ahead", 21: "distance"}
 
 
 def cheb(a, b):
@@ -117,7 +123,8 @@ def material(board, color):
 
 
 def features(board, move, cp_gap_pawns, rank,
-             prev_my_to=None, prev_opp_capture_to=None, prev_my_from=None):
+             prev_my_to=None, prev_opp_capture_to=None, prev_my_from=None,
+             tension=0.0):
     x = [0.0] * N_CANON
     x[0] = min(max(cp_gap_pawns, 0.0), 5.0)
     x[1] = rank / 4.0
@@ -126,41 +133,54 @@ def features(board, move, cp_gap_pawns, rank,
     x[3] = 1.0 if board.gives_check(move) else 0.0
     x[4] = 1.0 if move.promotion else 0.0
     x[5] = 1.0 if board.is_castling(move) else 0.0
-    piece = board.piece_type_at(move.from_square)  # 1..6 = P N B R Q K
-    if piece:
-        x[5 + piece] = 1.0
+    mover = board.piece_type_at(move.from_square)  # 1..6 = P N B R Q K
+    if mover:
+        x[5 + mover] = 1.0
     tf, tr = chess.square_file(move.to_square), chess.square_rank(move.to_square)
     x[12] = (abs(tf - 3.5) + abs(tr - 3.5)) / 7.0
     fr = chess.square_rank(move.from_square)
     white = board.turn == chess.WHITE
     x[13] = 1.0 if (tr > fr if white else tr < fr) else 0.0
+    victim = None
     if is_cap:
-        victim = board.piece_type_at(move.to_square)  # None means en passant
-        x[14] = PIECE_VALUES[victim or chess.PAWN] / 9.0
+        victim = board.piece_type_at(move.to_square) or chess.PAWN  # ep is a pawn
+        x[14] = PIECE_VALUES[victim] / 9.0
     x[15] = 1.0 if (tr < fr if white else tr > fr) else 0.0
     x[16] = 1.0 if prev_my_to is not None and prev_my_to == move.from_square else 0.0
-    ek = board.king(not board.turn)
-    if ek is not None:
-        x[17] = 1.0 if cheb(move.to_square, ek) < cheb(move.from_square, ek) else 0.0
-        x[24] = cheb(move.to_square, ek) / 7.0
-    x[18] = 1.0 if is_cap and prev_opp_capture_to == move.to_square else 0.0
+    x[17] = 1.0 if is_cap and prev_opp_capture_to == move.to_square else 0.0
     from_att = board.is_attacked_by(not board.turn, move.from_square)
     to_att = board.is_attacked_by(not board.turn, move.to_square)
-    x[19] = 1.0 if from_att else 0.0
-    x[20] = 1.0 if to_att else 0.0
-    x[21] = 1.0 if is_cap and material(board, board.turn) > material(board, not board.turn) else 0.0
-    x[22] = cheb(move.from_square, move.to_square) / 7.0
-    x[23] = 1.0 if (tr >= 4 if white else tr <= 3) else 0.0
-    x[25] = 1.0 if is_cap and to_att else 0.0
-    x[26] = 1.0 if from_att and not to_att else 0.0
-    mover = board.turn
-    board.push(move)
-    x[27] = 1.0 if board.is_attacked_by(mover, move.to_square) else 0.0
-    board.pop()
-    x[28] = 1.0 if (fr == 0 if white else fr == 7) else 0.0
-    x[29] = 1.0 if (prev_my_to is not None and prev_my_to == move.from_square and
+    x[18] = 1.0 if from_att else 0.0
+    x[19] = 1.0 if to_att else 0.0
+    ek = board.king(not board.turn)
+    if ek is not None:
+        x[20] = cheb(move.to_square, ek) / 7.0
+    x[21] = 1.0 if is_cap and to_att else 0.0
+    x[23] = 1.0 if (fr == 0 if white else fr == 7) else 0.0
+    x[24] = 1.0 if (prev_my_to is not None and prev_my_to == move.from_square and
                     prev_my_from is not None and prev_my_from == move.to_square) else 0.0
+    # post-move facts: defense of the landed piece, and what got left en prise
+    me, opp = board.turn, not board.turn
+    board.push(move)
+    defended = board.is_attacked_by(me, move.to_square)
+    x[22] = 1.0 if defended else 0.0
+    x[25] = 1.0 if (board.is_attacked_by(opp, move.to_square) and not defended) else 0.0
+    for sq, p in board.piece_map().items():
+        if (p.color == me and sq != move.to_square and
+                p.piece_type in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN) and
+                board.is_attacked_by(opp, sq) and not board.is_attacked_by(me, sq)):
+            x[26] = 1.0
+            break
+    board.pop()
+    x[27] = 1.0 if (is_cap and to_att and PIECE_VALUES[victim] < PIECE_VALUES[mover]) else 0.0
+    x[28] = PIECE_VALUES[mover] / 9.0 if mover else 0.0
+    x[29] = x[0] * tension
     return x
+
+
+def position_tension(board):
+    """How sharp the position is: available captures for the mover, capped."""
+    return min(1.0, sum(1 for m in board.legal_moves if board.is_capture(m)) / 10.0)
 
 
 def collect_examples(games, engine):
@@ -180,6 +200,7 @@ def collect_examples(games, engine):
                 break
             if ply >= MIN_PLY and board.turn == color and not board.is_game_over():
                 infos = engine.analyse(board, chess.engine.Limit(depth=DEPTH), multipv=MULTIPV)
+                tension = position_tension(board)
                 cands, best_cp = [], None
                 for rank, info in enumerate(infos):
                     if "pv" not in info or not info["pv"]:
@@ -191,7 +212,7 @@ def collect_examples(games, engine):
                     gap = (best_cp - cp) / 100.0
                     cands.append((cand, features(board, cand, gap, rank,
                                                  prev_my_to, prev_opp_capture_to,
-                                                 prev_my_from)))
+                                                 prev_my_from, tension)))
                 chosen = next((i for i, (c, _) in enumerate(cands) if c == move), None)
                 if chosen is not None and len(cands) >= 2:
                     examples.append((gi, [f for _, f in cands], chosen))
@@ -211,7 +232,7 @@ def get_examples():
             os.path.getmtime(EX_CACHE) > os.path.getmtime(CACHE)):
         d = json.load(open(EX_CACHE))
         if (d.get("fmt") == "c30" and d.get("engine") == ENGINE_TAG
-                and d.get("depth") == DEPTH):
+                and d.get("depth") == DEPTH and d.get("multipv") == MULTIPV):
             print(f"examples cache hit: {len(d['examples'])} examples")
             return d["examples"]
     if not ENGINE_CMD:
@@ -223,7 +244,7 @@ def get_examples():
     with chess.engine.SimpleEngine.popen_uci(ENGINE_CMD) as engine:
         examples = collect_examples(games, engine)
     json.dump({"fmt": "c30", "engine": ENGINE_TAG, "depth": DEPTH,
-               "examples": examples}, open(EX_CACHE, "w"))
+               "multipv": MULTIPV, "examples": examples}, open(EX_CACHE, "w"))
     return examples
 
 
@@ -312,17 +333,18 @@ def accuracy_many(X, M, y, W):
 
 
 def incumbent_extras():
-    """The variable subset the live model currently uses, as new-scheme indices."""
+    """The variable subset the live model currently uses, as new-scheme indices.
+
+    Matched by NAME so contract renumberings never break hysteresis; an
+    incumbent naming a feature the pool no longer carries simply steps down.
+    """
     try:
         cur = json.load(open(OUT))
     except (FileNotFoundError, json.JSONDecodeError):
         return None
-    if cur.get("features") == "v4":
-        names = cur.get("extras", [])
-    elif cur.get("features") == "v3":
-        names = [V3_NAMES[i] for i in cur.get("active", []) if i in V3_NAMES]
-    else:
+    if cur.get("features") not in ("v4", "v5"):
         return None
+    names = cur.get("extras", [])
     if not all(n in NAME_TO_EXTRA for n in names):
         return None
     return tuple(sorted(NAME_TO_EXTRA[n] for n in names))
@@ -391,7 +413,7 @@ def main():
           f"engine-best {engine_test:.2%} ({int(test_m.sum())} examples)")
 
     json.dump({
-        "features": "v4",
+        "features": "v5",
         "active": cols,
         "weights": [round(float(x), 5) for x in w.tolist()],
         "extras": [EXTRA_NAMES[i] for i in sorted(chosen_combo)],
