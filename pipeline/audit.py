@@ -33,6 +33,7 @@ except ImportError:
     sys.exit("numpy required")
 
 AVG_CAP = 1000  # cap per-move loss when averaging, standard ACPL practice
+PLAY_TEMP = 0.8  # sampling temperature, matching docs/app.js
 
 
 def book_key(board):
@@ -181,6 +182,7 @@ def profile_bot(engine, n_games):
                 if not cands:
                     break
                 z = np.array([float(np.dot(w, [x[i] for i in active])) for _, _, x in cands])
+                z = z / PLAY_TEMP  # keep in sync with PLAY_TEMP in docs/app.js
                 p = np.exp(z - z.max()); p /= p.sum()
                 pick = rng.choices(range(len(cands)), weights=p.tolist())[0]
                 move, my_cp, x = cands[pick]

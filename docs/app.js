@@ -28,6 +28,10 @@ const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/ches
 // search depth for candidates - a contract with pipeline/train_style.py
 // (training must analyse at the depth the site plays at; retrain after changing)
 const DEPTH = 5
+// sampling temperature: 1 plays the learned distribution exactly; below 1
+// leans toward my most likely choices and trims the blunder tail.
+// keep in sync with PLAY_TEMP in pipeline/audit.py
+const PLAY_TEMP = 0.8
 
 // ---------- engine (single-threaded Stockfish 18 lite WASM) ----------
 // the same build the retrain pipeline analyses games with (run there via
@@ -520,7 +524,7 @@ function stylePick(lines) {
   if (scored.length < 2) return null
   const zmax = Math.max(...scored.map(c => c.z))
   let total = 0
-  for (const c of scored) { c.p = Math.exp(c.z - zmax); total += c.p }
+  for (const c of scored) { c.p = Math.exp((c.z - zmax) / PLAY_TEMP); total += c.p }
   let r = Math.random() * total
   for (const c of scored) {
     r -= c.p

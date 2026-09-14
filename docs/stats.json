@@ -264,54 +264,54 @@
   },
   "openings_black": [
     [
-      "Owens Defense",
-      12
+      "Sicilian Defense",
+      51
     ],
     [
-      "Reti Opening Queenside Fianchetto",
+      "Owen Defense",
+      23
+    ],
+    [
+      "Queen's Pawn Game",
+      13
+    ],
+    [
+      "Queen's Gambit Declined",
       10
     ],
     [
-      "Sicilian Defense Bowdler Attack",
+      "Scandinavian Defense",
       8
     ],
     [
-      "Van t Kruijs Opening",
-      6
-    ],
-    [
       "Dutch Defense",
-      6
-    ],
-    [
-      "Sicilian Defense Old Sicilian",
-      6
+      8
     ]
   ],
   "openings_white": [
     [
       "Scotch Game",
-      25
-    ],
-    [
-      "Kings Pawn Opening Kings",
-      10
+      37
     ],
     [
       "Philidor Defense",
-      9
+      14
     ],
     [
-      "Scandinavian Defense Mieses Kotrc",
-      6
+      "Scandinavian Defense",
+      14
     ],
     [
-      "Scandinavian Defense Closed",
-      5
+      "King's Pawn Game",
+      12
     ],
     [
-      "Petrovs Defense Steinitz Attack",
-      5
+      "French Defense",
+      11
+    ],
+    [
+      "Pirc Defense",
+      11
     ]
   ],
   "site_games": 0,

@@ -279,3 +279,10 @@ footer a { color: var(--ink-2); }
   .layout { grid-template-columns: 1fr; }
   .movelist { max-height: 160px; }
 }
+
+/* phones: the eval gutter slims down so the board keeps its width */
+@media (max-width: 520px) {
+  .board-col { --eval-w: calc(1.45rem + 21px); }
+  .eval-bar { left: calc(1.45rem + 4px); width: 11px; }
+  .eval-num { width: 1.45rem; font-size: 0.6rem; }
+}
