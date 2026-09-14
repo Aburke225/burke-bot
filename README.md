@@ -24,8 +24,9 @@ A chess bot that plays like me — built from every game I've played on
   on, and 15 variable ones where the trainer tries all 32,768 subsets and
   keeps whichever predicts my moves best on held-out games (with a switching
   margin, so near-ties don't churn the model). `docs/style.json` ships the
-  winner. If the model fails to load, a strength-capped engine (skill 4,
-  depth 8 — roughly my level) takes over instead.
+  winner. Candidates come from a depth-5 search — a human at my level thinks
+  a couple of moves ahead, so the bot does too. If the model fails to load,
+  a strength-capped engine (skill 4) takes over instead.
 - Games played against the bot on the site (only mine, flagged by sign-in)
   are captured and folded back in.
 - A daily GitHub Action checks for new games and, only when it finds any,

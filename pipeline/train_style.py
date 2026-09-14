@@ -57,7 +57,7 @@ EX_CACHE = os.path.join(REPO_ROOT, "pipeline", "examples-cache.json")
 OUT = os.path.join(REPO_ROOT, "docs", "style.json")
 MIN_PLY = 8
 MULTIPV = 5
-DEPTH = 8
+DEPTH = 5  # a contract with docs/app.js - candidates must come from the same search
 N_CANON = 30
 BASE = list(range(15))
 EXTRAS = list(range(15, 30))
@@ -210,7 +210,8 @@ def get_examples():
     if (os.path.exists(EX_CACHE) and
             os.path.getmtime(EX_CACHE) > os.path.getmtime(CACHE)):
         d = json.load(open(EX_CACHE))
-        if d.get("fmt") == "c30" and d.get("engine") == ENGINE_TAG:
+        if (d.get("fmt") == "c30" and d.get("engine") == ENGINE_TAG
+                and d.get("depth") == DEPTH):
             print(f"examples cache hit: {len(d['examples'])} examples")
             return d["examples"]
     if not ENGINE_CMD:
@@ -221,8 +222,8 @@ def get_examples():
     print(f"games in cache: {len(games)} (engine: {ENGINE_TAG})", flush=True)
     with chess.engine.SimpleEngine.popen_uci(ENGINE_CMD) as engine:
         examples = collect_examples(games, engine)
-    json.dump({"fmt": "c30", "engine": ENGINE_TAG, "examples": examples},
-              open(EX_CACHE, "w"))
+    json.dump({"fmt": "c30", "engine": ENGINE_TAG, "depth": DEPTH,
+               "examples": examples}, open(EX_CACHE, "w"))
     return examples
 
 

@@ -25,6 +25,10 @@ let stdStart = true  // capture only games that began from the standard position
 let gameActive = false
 const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/chess/game"
 
+// search depth for candidates - a contract with pipeline/train_style.py
+// (training must analyse at the depth the site plays at; retrain after changing)
+const DEPTH = 5
+
 // ---------- engine (single-threaded Stockfish 18 lite WASM) ----------
 // the same build the retrain pipeline analyses games with (run there via
 // node), so the model always chooses among the candidates it trained on
@@ -69,6 +73,8 @@ const engine = (() => {
     }
   }
   worker.postMessage("uci")
+  // one engine serves both move choice and the eval bar, so searches queue up
+  let queue = Promise.resolve()
   return {
     ready,
     // with the style model in charge of humanness, search runs clean:
@@ -78,12 +84,15 @@ const engine = (() => {
       worker.postMessage("setoption name MultiPV value 5")
     },
     bestMove(fen) {
-      return new Promise(res => {
+      const run = () => new Promise(res => {
         lines = {}
         onBest = res
         worker.postMessage("position fen " + fen)
-        worker.postMessage("go depth 8")
+        worker.postMessage("go depth " + DEPTH)
       })
+      const p = queue.then(run)
+      queue = p.then(() => {}, () => {})
+      return p
     },
   }
 })()
@@ -125,14 +134,19 @@ function renderMoves() {
   for (let i = 0; i < hist.length; i += 2) {
     const li = document.createElement("li")
     const w = document.createElement("span"); w.className = "w"; w.textContent = hist[i]
+    w.dataset.ply = i
     li.appendChild(w)
     if (hist[i + 1]) {
       const b = document.createElement("span"); b.className = "b"; b.textContent = hist[i + 1]
+      b.dataset.ply = i + 1
       li.appendChild(b)
     }
     movelistEl.appendChild(li)
   }
   movelistEl.scrollTop = movelistEl.scrollHeight
+  // any real move snaps history browsing back to the live position
+  viewPly = -1
+  endHiddenForBrowse = false
 }
 
 function gameOverLine() {
@@ -153,6 +167,91 @@ function checkNote() {
 }
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms))
+
+// ---------- history browsing (arrow keys, like chess.com) ----------
+
+let viewPly = -1  // -1 = the live position; otherwise "position after ply N"
+let endHiddenForBrowse = false
+
+function fenAtPly(k) {
+  const hist = chess.history({ verbose: true })
+  if (!hist.length) return chess.fen()
+  return k <= 0 ? hist[0].before : hist[Math.min(k, hist.length) - 1].after
+}
+
+function browseTo(k) {
+  const n = chess.history().length
+  if (!n || !boardRef) return
+  k = Math.max(0, Math.min(n, k))
+  viewPly = k === n ? -1 : k
+  const live = viewPly === -1
+  const fen = live ? chess.fen() : fenAtPly(k)
+  boardRef.setPosition(fen, true)
+  // pieces only move at the live position, on the user's turn
+  try { boardRef.disableMoveInput() } catch (e) {}
+  if (live && gameActive && chess.turn() !== botColor) {
+    boardRef.enableMoveInput(inputHandler, botColor === "w" ? COLOR.black : COLOR.white)
+  }
+  // the end screen steps aside while reviewing and returns at the end
+  const end = document.getElementById("end")
+  if (!live && !end.hidden) { end.hidden = true; endHiddenForBrowse = true }
+  if (live && endHiddenForBrowse) { end.hidden = false; endHiddenForBrowse = false }
+  // mark the viewed move in the list
+  movelistEl.querySelectorAll(".cur").forEach(s => s.classList.remove("cur"))
+  if (!live && k > 0) {
+    const span = movelistEl.querySelector('[data-ply="' + (k - 1) + '"]')
+    if (span) { span.classList.add("cur"); span.scrollIntoView({ block: "nearest" }) }
+  }
+  updateEval(fen)
+}
+
+function browseKey(e) {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return
+  const n = chess.history().length
+  if (!n) return
+  const cur = viewPly === -1 ? n : viewPly
+  if (e.key === "ArrowLeft") browseTo(cur - 1)
+  else if (e.key === "ArrowRight") browseTo(cur + 1)
+  else if (e.key === "ArrowUp") browseTo(0)
+  else if (e.key === "ArrowDown") browseTo(n)
+  else return
+  e.preventDefault()
+}
+
+// ---------- the eval bar (White's winning chances, chess.com style) ----------
+
+let evalToken = 0
+
+function renderEvalBar(cpWhite) {
+  const bar = document.getElementById("eval-bar")
+  const fill = document.getElementById("eval-fill")
+  const num = document.getElementById("eval-num")
+  if (!bar || !fill || !num) return
+  const mate = Math.abs(cpWhite) >= 9000
+  let p = mate ? (cpWhite > 0 ? 1 : 0) : 1 / (1 + Math.pow(10, -cpWhite / 400))
+  if (!mate) p = Math.min(0.95, Math.max(0.05, p))
+  fill.style.height = Math.round(p * 100) + "%"
+  num.textContent = mate ? "#" : (cpWhite >= 0 ? "+" : "−") + Math.abs(cpWhite / 100).toFixed(1)
+  let flipped = false
+  try { flipped = boardRef.getOrientation() === COLOR.black } catch (e) {}
+  bar.classList.toggle("flip", flipped)
+  // the number sits at the leading side's end of the bar, on that side's color
+  const whiteLeads = cpWhite >= 0
+  num.classList.toggle("top", whiteLeads ? flipped : !flipped)
+  num.style.color = whiteLeads ? "#23261f" : "#e9ecd6"
+}
+
+async function updateEval(fen) {
+  if (!document.getElementById("eval-bar")) return
+  const my = ++evalToken
+  await engine.ready
+  const result = await engine.bestMove(fen)
+  if (my !== evalToken) return  // a newer position took over
+  const line = result.lines[1]
+  if (!line) return
+  const cpWhite = fen.split(" ")[1] === "w" ? line.cp : -line.cp
+  renderEvalBar(cpWhite)
+}
 
 // ---------- the style model (behavioral cloning over engine candidates) ----------
 
@@ -355,6 +454,7 @@ function captureGame(result) {
 async function botMove(board, id) {
   if (chess.isGameOver()) { finishAuto(); return }
   setStatus("thinking", "thinking", "…")
+  updateEval(chess.fen())
   const started = Date.now()
 
   const fromBook = pickBookMove()
@@ -385,6 +485,7 @@ async function botMove(board, id) {
   await board.setPosition(chess.fen(), true)
   renderMoves()
   if (chess.isGameOver()) { finishAuto(); return }
+  updateEval(chess.fen())
 
   if (source) {
     const pct = Math.round(100 * (source.wins + source.draws / 2) / source.n)
@@ -412,6 +513,8 @@ function finishAuto() {
 
 function finish(result, line) {
   gameActive = false
+  if (chess.isCheckmate()) renderEvalBar(chess.turn() === "w" ? -10000 : 10000)
+  else if (result === "d") renderEvalBar(0)
   setStatus("over", "game over", line)
   boardRef.disableMoveInput()
   setControls(false)
@@ -454,6 +557,7 @@ function playAgain() {
   setControls(false)
   boardRef.setOrientation(COLOR.white, false)
   boardRef.setPosition(chess.fen(), false)
+  renderEvalBar(0)
   setStatus("book", "new game", "Pick your color to start.")
   document.getElementById("confirm").hidden = true
   document.getElementById("end").hidden = true
@@ -556,6 +660,7 @@ function newGame(userColor) {
     } else {
       setStatus("book", "your move", "You have the white pieces — go ahead.")
       boardRef.enableMoveInput(inputHandler, COLOR.white)
+      updateEval(chess.fen())
     }
   })
 }
@@ -639,6 +744,7 @@ async function boot() {
     if (gameActive) finish("l", "You resigned — I'll take it.")
   })
   setStatus("book", "new game", "Pick your color to start.")
+  document.addEventListener("keydown", browseKey)
 
   // dev hooks (console-only): load a FEN, drive moves, inspect state
   window.bb = {
@@ -675,6 +781,7 @@ async function boot() {
         } else {
           setStatus("book", "your move", "Custom position — your move.")
           boardRef.enableMoveInput(inputHandler, chess.turn() === "w" ? COLOR.white : COLOR.black)
+          updateEval(chess.fen())
         }
       })
     },

@@ -190,7 +190,28 @@ footer a { color: var(--ink-2); }
 }
 
 /* overlays: pick a color to start; the end screen when it's over */
-.board-wrap { position: relative; }
+.board-wrap { position: relative; flex: 1; min-width: 0; }
+.board-row { display: flex; gap: 0.55rem; align-items: stretch; }
+
+/* the eval bar - White's share fills from White's side of the board */
+.eval-bar {
+  position: relative; flex: none; width: 15px;
+  border-radius: 5px; overflow: hidden;
+  background: #23261f; border: 1px solid var(--border);
+}
+.eval-fill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 50%;
+  background: #e9ecd6; transition: height 0.5s ease;
+}
+.eval-bar.flip .eval-fill { bottom: auto; top: 0; }
+.eval-num {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 3px;
+  font-size: 0.48rem; font-weight: 700; white-space: nowrap; z-index: 1;
+}
+.eval-num.top { bottom: auto; top: 3px; }
+
+/* the move being reviewed with the arrow keys */
+.movelist span.cur { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .board-overlay[hidden] { display: none; }
 .board-overlay {
   position: absolute;
