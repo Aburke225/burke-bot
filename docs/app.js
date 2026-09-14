@@ -168,6 +168,61 @@ function checkNote() {
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 
+// ---------- sounds (synthesized with WebAudio - no files, no licenses) ----------
+
+const sfx = (() => {
+  let ctx = null
+  const ac = () => ctx || (ctx = new (window.AudioContext || window.webkitAudioContext)())
+  // a soft wooden knock: a short low-pass filtered noise burst
+  function knock(gain, when = 0, tone = 900) {
+    try {
+      const c = ac(), t = c.currentTime + when
+      const len = Math.floor(c.sampleRate * 0.06)
+      const buf = c.createBuffer(1, len, c.sampleRate)
+      const d = buf.getChannelData(0)
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3)
+      const s = c.createBufferSource(); s.buffer = buf
+      const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = tone
+      const g = c.createGain(); g.gain.value = gain
+      s.connect(f); f.connect(g); g.connect(c.destination)
+      s.start(t)
+    } catch (e) {}
+  }
+  function blip(freq, dur, gain, when = 0, slide = 0) {
+    try {
+      const c = ac(), t = c.currentTime + when
+      const o = c.createOscillator(), g = c.createGain()
+      o.type = "sine"
+      o.frequency.setValueAtTime(freq, t)
+      if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur)
+      g.gain.setValueAtTime(gain, t)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+      o.connect(g); g.connect(c.destination)
+      o.start(t); o.stop(t + dur + 0.02)
+    } catch (e) {}
+  }
+  return {
+    unlock() { try { ac().resume() } catch (e) {} },
+    move() { knock(0.5) },
+    capture() { knock(0.75, 0, 700); knock(0.35, 0.05) },
+    castle() { knock(0.45); knock(0.45, 0.09) },
+    check() { knock(0.45); blip(620, 0.14, 0.09, 0, 830) },
+    promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
+    start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
+    end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
+  }
+})()
+
+// one sound per move, chess.com priorities: check > promote > capture > castle > plain
+function playMoveSound(m) {
+  if (!m) return
+  if (m.san.includes("+") || m.san.includes("#")) sfx.check()
+  else if (m.promotion) sfx.promote()
+  else if (m.captured) sfx.capture()
+  else if (m.flags.includes("k") || m.flags.includes("q")) sfx.castle()
+  else sfx.move()
+}
+
 // ---------- history browsing (arrow keys, like chess.com) ----------
 
 let viewPly = -1  // -1 = the live position; otherwise "position after ply N"
@@ -183,8 +238,15 @@ function browseTo(k) {
   const n = chess.history().length
   if (!n || !boardRef) return
   k = Math.max(0, Math.min(n, k))
+  const prev = viewPly === -1 ? n : viewPly
   viewPly = k === n ? -1 : k
   const live = viewPly === -1
+  // a single step replays that move's sound; a jump gets a plain tap
+  if (Math.abs(k - prev) === 1) {
+    playMoveSound(chess.history({ verbose: true })[Math.max(k, prev) - 1])
+  } else if (k !== prev) {
+    sfx.move()
+  }
   const fen = live ? chess.fen() : fenAtPly(k)
   boardRef.setPosition(fen, true)
   // pieces only move at the live position, on the user's turn
@@ -209,6 +271,7 @@ function browseKey(e) {
   if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return
   const n = chess.history().length
   if (!n) return
+  sfx.unlock()
   const cur = viewPly === -1 ? n : viewPly
   if (e.key === "ArrowLeft") browseTo(cur - 1)
   else if (e.key === "ArrowRight") browseTo(cur + 1)
@@ -235,10 +298,6 @@ function renderEvalBar(cpWhite) {
   let flipped = false
   try { flipped = boardRef.getOrientation() === COLOR.black } catch (e) {}
   bar.classList.toggle("flip", flipped)
-  // the number sits at the leading side's end of the bar, on that side's color
-  const whiteLeads = cpWhite >= 0
-  num.classList.toggle("top", whiteLeads ? flipped : !flipped)
-  num.style.color = whiteLeads ? "#23261f" : "#e9ecd6"
 }
 
 async function updateEval(fen) {
@@ -481,6 +540,7 @@ async function botMove(board, id) {
     source = null
   }
   if (!played) { finishAuto(); return }
+  playMoveSound(played)
 
   await board.setPosition(chess.fen(), true)
   renderMoves()
@@ -515,6 +575,7 @@ function finish(result, line) {
   gameActive = false
   if (chess.isCheckmate()) renderEvalBar(chess.turn() === "w" ? -10000 : 10000)
   else if (result === "d") renderEvalBar(0)
+  sfx.end()
   setStatus("over", "game over", line)
   boardRef.disableMoveInput()
   setControls(false)
@@ -542,6 +603,8 @@ function startGame(userColor) {
   document.getElementById("pick").hidden = true
   document.getElementById("confirm").hidden = true
   document.getElementById("end").hidden = true
+  sfx.unlock()
+  sfx.start()
   gameActive = true
   newGame(userColor)
   setControls(true)
@@ -607,6 +670,7 @@ function inputHandler(event) {
   if (event.type === INPUT_EVENT_TYPE.validateMoveInput) {
     const result = tryMove({ from: event.squareFrom, to: event.squareTo, promotion: event.promotion })
     if (result) {
+      playMoveSound(result)
       const id = gameId
       event.chessboard.state.moveInputProcess.then(() => {
         event.chessboard.setPosition(chess.fen(), true).then(() => {
@@ -623,7 +687,7 @@ function inputHandler(event) {
         const userColor = botColor === "w" ? COLOR.black : COLOR.white
         event.chessboard.showPromotionDialog(event.squareTo, userColor, (res) => {
           if (res.type === PROMOTION_DIALOG_RESULT_TYPE.pieceSelected) {
-            tryMove({ from: event.squareFrom, to: event.squareTo, promotion: res.piece.charAt(1) })
+            playMoveSound(tryMove({ from: event.squareFrom, to: event.squareTo, promotion: res.piece.charAt(1) }))
             event.chessboard.setPosition(chess.fen(), true).then(() => {
               renderMoves()
               botMove(event.chessboard, gameId)

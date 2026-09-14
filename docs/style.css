@@ -190,12 +190,12 @@ footer a { color: var(--ink-2); }
 }
 
 /* overlays: pick a color to start; the end screen when it's over */
-.board-wrap { position: relative; flex: 1; min-width: 0; }
-.board-row { display: flex; gap: 0.55rem; align-items: stretch; }
-
-/* the eval bar - White's share fills from White's side of the board */
+/* the eval bar sits inside board-wrap so the overlays always cover the
+   whole board (a flex-stretched wrap could end up 1px shorter than the
+   JS-sized board svg); the number reads full-size to its left */
+.board-wrap { position: relative; padding-left: calc(2.1rem + 15px + 13px); }
 .eval-bar {
-  position: relative; flex: none; width: 15px;
+  position: absolute; left: calc(2.1rem + 5px); top: 0; bottom: 0; width: 15px;
   border-radius: 5px; overflow: hidden;
   background: #23261f; border: 1px solid var(--border);
 }
@@ -205,10 +205,10 @@ footer a { color: var(--ink-2); }
 }
 .eval-bar.flip .eval-fill { bottom: auto; top: 0; }
 .eval-num {
-  position: absolute; left: 50%; transform: translateX(-50%); bottom: 3px;
-  font-size: 0.48rem; font-weight: 700; white-space: nowrap; z-index: 1;
+  position: absolute; left: 0; width: 2.1rem; top: 50%; transform: translateY(-50%);
+  text-align: right; font-size: 0.72rem; font-weight: 700;
+  white-space: nowrap; color: var(--ink);
 }
-.eval-num.top { bottom: auto; top: 3px; }
 
 /* the move being reviewed with the arrow keys */
 .movelist span.cur { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }

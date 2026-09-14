@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
   <div class="wrap">
@@ -28,12 +28,11 @@
 
     <main class="layout">
       <section class="board-col">
-        <div class="board-row">
-        <div class="eval-bar" id="eval-bar" title="engine evaluation (White's chances)">
-          <div class="eval-fill" id="eval-fill"></div>
-          <span class="eval-num" id="eval-num">0.0</span>
-        </div>
         <div class="board-wrap">
+          <span class="eval-num" id="eval-num">0.0</span>
+          <div class="eval-bar" id="eval-bar" title="engine evaluation (White's chances)">
+            <div class="eval-fill" id="eval-fill"></div>
+          </div>
           <div class="board" id="board"></div>
           <div class="board-overlay" id="pick">
             <p class="ov-kicker">new game</p>
@@ -54,7 +53,6 @@
             <p class="ov-line" id="end-line"></p>
             <button id="again" class="btn">Play again</button>
           </div>
-        </div>
         </div>
         <div class="controls">
           <button id="draw-btn" class="btn" disabled>Offer draw</button>
@@ -114,6 +112,6 @@
       render();
     })();
   </script>
-  <script type="module" src="app.js?v=17"></script>
+  <script type="module" src="app.js?v=18"></script>
 </body>
 </html>
