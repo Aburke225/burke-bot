@@ -1652,14 +1652,14 @@ async function boot() {
     if (!el || !hb || !hb.utc) return
     const ageH = (Date.now() - Date.parse(hb.utc)) / 36e5
     if (!isFinite(ageH)) return
-    const stale = ageH > 36
-    el.textContent = stale
-      ? ` \u00b7 last update ${Math.floor(ageH / 24)}d ago`
-      : ` \u00b7 updated ${ageH < 1 ? "just now" : Math.floor(ageH) + "h ago"}`
-    el.classList.toggle("stale", stale)
-    el.title = stale
-      ? "The nightly update has not run in over 36 hours - check the Actions tab"
-      : `nightly update ran ${hb.utc}` + (hb.retrained ? " and retrained" : "")
+    // Silent when healthy - he did not want a stamp sitting in the footer on
+    // a normal day. It speaks ONLY when the nightly job has gone quiet, which
+    // is the case no email can cover: a cron that never fires raises no
+    // failure, so silence and success otherwise look identical.
+    if (ageH <= 36) return
+    el.textContent = ` \u00b7 nightly update last ran ${Math.floor(ageH / 24)}d ago`
+    el.classList.add("stale")
+    el.title = "The nightly update has not run in over 36 hours - check the Actions tab"
     el.hidden = false
   }).catch(() => {})
 

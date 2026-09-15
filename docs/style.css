@@ -230,6 +230,7 @@ body {
 .copy-btn.done { color: var(--accent); border-color: var(--accent); }
 /* a quiet pulse in the footer: if the nightly job stops running, nothing else
    on the page would ever say so */
+/* only ever visible when the nightly job has gone quiet - see app.js */
 .heartbeat { margin-left: 0.5rem; }
 .heartbeat.stale { color: #d9a441; }
 
@@ -402,11 +403,23 @@ footer a { color: var(--ink-2); }
   .controls .btn { width: auto; }
 }
 
+/* Desktop only - on phones this column already reads well and he asked for it
+   to stay untouched. Both card headings move together: "Moves" sitting a step
+   above "The data behind me" in the same column would read as a mistake. The
+   svg rule covers the checkmark as well as the clipboard, so the confirmation
+   icon grows by exactly the same amount the button does. */
+@media (min-width: 861px) {
+  .moves-card h2, .stats-card h2 { font-size: 1.16rem; }
+  .copy-btn { width: 1.86rem; height: 1.86rem; }
+  .copy-btn svg { width: 1.04rem; height: 1.04rem; }
+}
+
 /* phones: the eval gutter slims down so the board keeps its width */
 @media (max-width: 520px) {
-  /* "Back to the game" / "Yes, resign" were touching both board edges */
-  #confirm .btn { font-size: 0.82rem; padding: 0.45rem 0.6rem; }
-  #confirm .ov-buttons { gap: 0.5rem; }
+  /* "Back to the game" / "Yes, resign" and "Play as White" / "Play as Black"
+     were each spanning the full width of the board */
+  #confirm .btn, #pick .btn { font-size: 0.82rem; padding: 0.45rem 0.6rem; }
+  #confirm .ov-buttons, #pick .ov-buttons { gap: 0.5rem; }
   .wrap { --eval-w: calc(1.45rem + 21px); }
   /* three header buttons no longer fit beside the wordmark at this width, so
      they keep their corner and the title drops below them */
