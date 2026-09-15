@@ -33,10 +33,13 @@
 /* On a desktop the type scales with the window exactly as the board does, so
    the whole page keeps one set of proportions. A 1440x900 laptop is the
    reference: 900 * 0.01778 = 16px, the browser default, so that view is
-   unchanged. Everything sized in rem follows automatically. Phones are left
-   out on purpose - a stacked layout wants normal, readable text. */
+   unchanged. The board is height-bound on a tall window but width-bound on a
+   narrow one (it is capped at 66% of the row), so the type tracks whichever
+   is binding - hence the min() of a vh and a vw term. Everything sized in rem
+   follows automatically. Phones are left out on purpose - a stacked layout
+   wants normal, readable text. */
 @media (min-width: 861px) {
-  html { font-size: clamp(14px, 1.78vh, 24px); }
+  html { font-size: clamp(13px, min(1.78vh, 1.36vw), 24px); }
 }
 
 body {

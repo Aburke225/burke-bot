@@ -140,6 +140,10 @@ function setStatusRaw(kind, label, line) {
   statusDot.className = "dot " + kind
   statusLabel.textContent = label
   statusLine.textContent = line
+  // the chat line can wrap to two lines, which grows the panel; the move list
+  // has to give that height back or Resign drops below the board
+  fitMoveList()
+  revealCurrentMove()
 }
 
 function setStatus(kind, label, line) {
@@ -434,6 +438,8 @@ function browseTo(k) {
   if (mark >= 0) {
     const span = movelistEl.querySelector('[data-ply="' + mark + '"]')
     if (span) { span.classList.add("cur"); revealCurrentMove() }
+  } else {
+    movelistEl.scrollTop = 0  // at the starting position, show the first move
   }
   // ...and highlight its from/to squares on the board
   try {
@@ -1127,8 +1133,12 @@ async function boot() {
     const SPK = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
     const ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       SPK + '<path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
+    // the slash takes the WAVES' place rather than cutting across the speaker:
+    // a full diagonal fragments the speaker into unreadable pieces at 18px,
+    // while this leaves it whole and keeps it in the same spot in both states,
+    // so toggling only swaps waves for slash
     const OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<g transform="translate(6.5,0)">' + SPK + '</g><line x1="4" y1="20" x2="20" y2="4"/></svg>'
+      SPK + '<line x1="14" y1="18.5" x2="21.5" y2="6.5"/></svg>'
     const renderSound = () => {
       const off = sfx.isMuted()
       soundBtn.innerHTML = off ? OFF : ON
