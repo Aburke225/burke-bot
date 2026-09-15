@@ -217,6 +217,11 @@ body {
   flex: none;
   width: 1.7rem; height: 1.7rem;
   margin-bottom: 0.55rem;   /* sit on the same line the heading already claims */
+  /* A <button> carries 6px of UA horizontal padding by default. Left in, it
+     cuts the content box to 15.8px, and since an svg flex item defaults to
+     flex-shrink:1 the icon was squeezed on the WIDTH only - painting a
+     non-square 15.80 x 16.66 - while silently ignoring any width we set. */
+  padding: 0;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid transparent;
   border-radius: 7px;
@@ -225,7 +230,7 @@ body {
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.copy-btn svg { width: 0.95rem; height: 0.95rem; }
+.copy-btn svg { flex: none; width: 0.95rem; height: 0.95rem; }
 .copy-btn:hover { color: var(--ink); border-color: var(--border); background: var(--surface-2); }
 .copy-btn.done { color: var(--accent); border-color: var(--accent); }
 /* a quiet pulse in the footer: if the nightly job stops running, nothing else
@@ -403,15 +408,19 @@ footer a { color: var(--ink-2); }
   .controls .btn { width: auto; }
 }
 
-/* Desktop only - on phones this column already reads well and he asked for it
-   to stay untouched. Both card headings move together: "Moves" sitting a step
-   above "The data behind me" in the same column would read as a mistake. The
-   svg rule covers the checkmark as well as the clipboard, so the confirmation
-   icon grows by exactly the same amount the button does. */
+/* Desktop only - on phones this column already reads well and is left alone.
+   The card headings keep their original 1.06rem; only the copy control grows.
+
+   The tick gets a BIGGER box than the clipboard on purpose. Both icons share a
+   24x24 viewBox, but the clipboard's ink fills 92% of that box in both
+   directions while the tick's polyline fills 75% wide and only 54% tall. At
+   equal box sizes the tick therefore paints a bit over half the height of the
+   clipboard and reads as undersized. That is geometry, not taste, so the fix
+   is a per-icon box rather than a nudge to the shared rule. */
 @media (min-width: 861px) {
-  .moves-card h2, .stats-card h2 { font-size: 1.16rem; }
   .copy-btn { width: 1.86rem; height: 1.86rem; }
   .copy-btn svg { width: 1.04rem; height: 1.04rem; }
+  .copy-btn.done svg { width: 1.38rem; height: 1.38rem; }
 }
 
 /* phones: the eval gutter slims down so the board keeps its width */
@@ -420,6 +429,11 @@ footer a { color: var(--ink-2); }
      were each spanning the full width of the board */
   #confirm .btn, #pick .btn { font-size: 0.82rem; padding: 0.45rem 0.6rem; }
   #confirm .ov-buttons, #pick .ov-buttons { gap: 0.5rem; }
+  /* The two opening labels already run nearly the full width of the card, so
+     their value has nowhere to sit beside them. Dropping the float gives the
+     label the line to itself and the value the next one; it stays right-aligned
+     so it still lines up with the numbers above it. */
+  .stats-card dt.wide { float: none; margin-right: 0; }
   .wrap { --eval-w: calc(1.45rem + 21px); }
   /* three header buttons no longer fit beside the wordmark at this width, so
      they keep their corner and the title drops below them */

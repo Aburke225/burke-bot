@@ -1562,6 +1562,10 @@ function renderStats(stats) {
     const dt = document.createElement("dt"); dt.textContent = k
     const dd = document.createElement("dd"); dd.textContent = v
     if (k === "rating" || k.startsWith("favorite")) dd.className = "g"
+    // The opening labels run nearly the full width of the card. Marked so a
+    // phone can drop their value onto its own line instead of squeezing it
+    // into what little room is left beside the label.
+    if (k.startsWith("favorite")) { dt.classList.add("wide"); dd.classList.add("wide") }
     list.appendChild(dt); list.appendChild(dd)
   }
 }
