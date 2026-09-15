@@ -115,11 +115,13 @@ body {
    stamp, not part of the name, so it uses the body face rather than the slab */
 .wordmark .version {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 0.3em;
+  /* rem, not em: this should read at the same size as the tagline below it
+     rather than tracking the wordmark's much larger type */
+  font-size: 0.9375rem;
   font-weight: 400;
   /* sits on the wordmark's own baseline, so the bottoms of the two line up */
   vertical-align: baseline;
-  margin-left: 0.35em;
+  margin-left: 0.4rem;
   letter-spacing: 0;
   color: var(--ink-2);
 }
