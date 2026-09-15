@@ -3,3 +3,4 @@ __pycache__/
 pipeline/games-cache.json
 pipeline/examples-cache.json
 pipeline/raw-cache.json
+pipeline/v9-contract.json

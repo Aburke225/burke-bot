@@ -28,6 +28,14 @@ const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/ches
 // search depth for candidates - a contract with pipeline/train_style.py
 // (training must analyse at the depth the site plays at; retrain after changing)
 const DEPTH = 5
+// The eval bar is NOT the bot's view of the position - it is the honest one,
+// so it searches far deeper than the bot plays. The model never touches it:
+// the number is Stockfish's own score for the position, full stop. Depth 5
+// would be the bot's shallow read, which is the wrong thing to show a player
+// judging how the game actually stands. ~70ms per ply, once per move.
+// chess.com's analysis eval settles around here; the score is converged by
+// this point (depth 18 and 20 agree within a few centipawns in test positions)
+const EVAL_DEPTH = 18
 // sampling temperature: 1 plays the learned distribution exactly; below 1
 // leans toward my most likely choices and trims the blunder tail. Measured on
 // 166 of my own positions: 0.8 -> 36cp average loss with 0.375 probability on
@@ -98,6 +106,59 @@ const engine = (() => {
         onBest = res
         worker.postMessage("position fen " + fen)
         worker.postMessage("go depth " + DEPTH)
+      })
+      const p = queue.then(run)
+      queue = p.then(() => {}, () => {})
+      return p
+    },
+  }
+})()
+
+// The eval bar gets its OWN engine. It searches far deeper than the bot plays
+// (~1s per position in the browser), and sharing the move engine's queue would
+// make every bot move wait for it. Loaded lazily, so a visitor who never starts
+// a game never pays for it. Nothing here touches the style model: the number on
+// the bar is Stockfish's own score for the position and nothing else.
+const evalEngine = (() => {
+  let worker = null, ready = null, onDone = null, score = null
+  let queue = Promise.resolve()
+  function boot() {
+    if (ready) return ready
+    worker = new Worker("vendor/stockfish/stockfish-18-lite-single.js")
+    let resolveReady
+    ready = new Promise(res => { resolveReady = res })
+    worker.onmessage = (e) => {
+      const line = typeof e.data === "string" ? e.data : ""
+      if (line === "uciok") {
+        worker.postMessage("setoption name MultiPV value 1")
+        worker.postMessage("isready")
+      } else if (line === "readyok") {
+        resolveReady()
+      } else if (line.startsWith("info ") && line.includes(" score ")) {
+        const cp = / score cp (-?\d+)/.exec(line)
+        const mate = / score mate (-?\d+)/.exec(line)
+        if (cp) score = parseInt(cp[1], 10)
+        else if (mate) {
+          const m = parseInt(mate[1], 10)
+          score = m > 0 ? 10000 - m : -10000 - m
+        }
+      } else if (line.startsWith("bestmove") && onDone) {
+        const done = onDone
+        onDone = null
+        done(score)
+      }
+    }
+    worker.postMessage("uci")
+    return ready
+  }
+  return {
+    async score(fen) {
+      await boot()
+      const run = () => new Promise(res => {
+        score = null
+        onDone = res
+        worker.postMessage("position fen " + fen)
+        worker.postMessage("go depth " + EVAL_DEPTH)
       })
       const p = queue.then(run)
       queue = p.then(() => {}, () => {})
@@ -502,12 +563,10 @@ function showEvalBar(on) {
 async function updateEval(fen) {
   if (!document.getElementById("eval-bar")) return
   const my = ++evalToken
-  await engine.ready
-  const result = await engine.bestMove(fen)
+  const cp = await evalEngine.score(fen)
   if (my !== evalToken) return  // a newer position took over
-  const line = result.lines[1]
-  if (!line) return
-  const cpWhite = fen.split(" ")[1] === "w" ? line.cp : -line.cp
+  if (cp === null || cp === undefined) return
+  const cpWhite = fen.split(" ")[1] === "w" ? cp : -cp
   renderEvalBar(cpWhite)
 }
 
@@ -750,7 +809,7 @@ function renderMe() {
   let has = false
   try { has = !!localStorage.getItem("bb-key") } catch (e) {}
   btn.classList.toggle("on", has)
-  btn.textContent = has ? "logout" : "It's me"
+  btn.textContent = has ? "logout" : "I'm Burke"
   btn.title = has
     ? "signed in - finished games train the bot"
     : "Andrew's sign-in for game capture"
@@ -789,7 +848,7 @@ function meClick() {
       busy = false
       input.disabled = false
       input.value = ""
-      input.placeholder = "nope"
+      input.placeholder = "you are not Burke"
       input.focus()
     }
   })
