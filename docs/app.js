@@ -292,7 +292,6 @@ function revealCurrentMove() {
 // NOT PIECE_VAL - that name belongs to the v9 feature extractor further down,
 // and redeclaring it killed the whole script before the board ever built.
 const CAP_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 }
-let botRating = null
 
 // The challenger wears a person, drawn in the same 2px round-cap language as
 // the rest of the site's icons. The bot wears a knight on a board square - the
@@ -312,26 +311,18 @@ function pieceGlyph(colour, type) {
 }
 
 function renderPlayers() {
-  const top = document.getElementById("pl-top")
-  const bottom = document.getElementById("pl-bot")
-  if (!top || !bottom) return
-  // nothing to name until a colour has been picked
-  const pick = document.getElementById("pick")
-  const started = pick ? pick.hidden : false
-  top.hidden = !started
-  bottom.hidden = !started
-  if (!started) return
-
+  const avTop = document.getElementById("av-top")
+  const avBot = document.getElementById("av-bot")
+  if (!avTop || !avBot) return
   let signedIn = false
   try { signedIn = !!localStorage.getItem("bb-key") } catch (e) {}
 
-  // the board is oriented to the user's colour, so the bot is always on top
-  const avTop = document.getElementById("av-top")
+  // Always on screen, including before a colour has been picked - the board
+  // starts in its white-at-the-bottom orientation, which puts the bot on the
+  // black side, and that is the pairing the pick overlay is offering.
   if (avTop.dataset.set !== "bot") { avTop.className = "avatar bot"; avTop.innerHTML = BOT_AVATAR; avTop.dataset.set = "bot" }
-  document.getElementById("nm-top").innerHTML =
-    "Burke Bot" + (botRating ? ' <span class="rat">' + botRating + "</span>" : "")
+  document.getElementById("nm-top").textContent = "Burke Bot"
 
-  const avBot = document.getElementById("av-bot")
   if (avBot.dataset.set !== "human") { avBot.className = "avatar human"; avBot.innerHTML = HUMAN_AVATAR; avBot.dataset.set = "human" }
   document.getElementById("nm-bot").textContent = signedIn ? "Burke" : "Challenger"
 }
@@ -374,7 +365,7 @@ function paintCaptures(el, counts, colour, advantage) {
   for (const type of ["p", "n", "b", "r", "q"]) {
     const n = (counts && counts[type]) || 0
     if (!n) continue
-    html += '<span class="cap-group">' + pieceGlyph(colour, type).repeat(n) + "</span>"
+    html += '<span class="cap-group cap-' + colour + '">' + pieceGlyph(colour, type).repeat(n) + "</span>"
   }
   // only the player who is ahead carries a badge, the way chess.com does it
   if (advantage > 0) html += '<span class="adv">+' + advantage + "</span>"
@@ -1347,6 +1338,7 @@ function renderMe() {
   btn.title = has
     ? "signed in - finished games train the bot"
     : "Andrew's sign-in for game capture"
+  renderPlayers()   // the challenger is named "Burke" once he signs in
 }
 
 function meClick() {
@@ -1645,7 +1637,6 @@ function newGame(userColor) {
 // ---------- stats panel ----------
 
 function renderStats(stats) {
-  botRating = stats.bot_scale_strength || null
   const list = document.getElementById("stats-list")
   const rows = [
     ["rating", stats.bot_scale_strength ? String(stats.bot_scale_strength) : "—"],
@@ -1706,6 +1697,7 @@ async function boot() {
   // analysis board, and highlighting a two-column scrolling list by hand is
   // miserable. Writes standard PGN movetext, not what is on screen.
   const copyBtn = document.getElementById("copy-moves")
+  let copyTimer = null
   if (copyBtn) {
     const COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
     const DONE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 12 9 17 20 6" pathLength="100"/></svg>'
@@ -1722,24 +1714,44 @@ async function boot() {
       try {
         await navigator.clipboard.writeText(text)
       } catch (e) {
-        // clipboard API needs a secure context and permission; fall back to
-        // the old selection trick rather than failing silently
+        // The async API refuses for reasons that have nothing to do with the
+        // page being wrong - no permission, the document not visible or not
+        // focused - so fall back rather than give up. iOS Safari ignores a
+        // plain .select() on a hidden textarea, hence the contentEditable and
+        // explicit Range dance, which is the combination it does honour.
         try {
           const ta = document.createElement("textarea")
           ta.value = text
-          ta.style.cssText = "position:fixed;opacity:0"
+          ta.setAttribute("readonly", "")
+          ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:none;opacity:0"
           document.body.appendChild(ta)
-          ta.select()
+          ta.contentEditable = "true"
+          ta.readOnly = false
+          const range = document.createRange()
+          range.selectNodeContents(ta)
+          const sel = window.getSelection()
+          sel.removeAllRanges()
+          sel.addRange(range)
+          ta.setSelectionRange(0, text.length)
           ok = document.execCommand("copy")
+          sel.removeAllRanges()
           ta.remove()
         } catch (e2) { ok = false }
       }
-      copyBtn.innerHTML = ok ? DONE_ICON : COPY_ICON
+      // Two things were making this look broken. The revert timer was never
+      // cleared, so a second copy within 1400ms left the FIRST timer running
+      // and it wiped the tick almost immediately - press it twice and it
+      // barely flashes. And a failed copy showed NOTHING: no tick, no error,
+      // identical to the button not working, which is what "sometimes it does
+      // not animate at all" actually is. Failure now flashes red instead.
+      clearTimeout(copyTimer)
       copyBtn.classList.toggle("done", ok)
-      copyBtn.title = ok ? "Copied" : "Could not copy"
-      setTimeout(() => {
+      copyBtn.classList.toggle("fail", !ok)
+      copyBtn.innerHTML = ok ? DONE_ICON : COPY_ICON
+      copyBtn.title = ok ? "Copied" : "Could not copy - your browser blocked it"
+      copyTimer = setTimeout(() => {
         copyBtn.innerHTML = COPY_ICON
-        copyBtn.classList.remove("done")
+        copyBtn.classList.remove("done", "fail")
         copyBtn.title = "Copy the move list"
       }, 1400)
     })
@@ -1763,6 +1775,10 @@ async function boot() {
     el.title = "The nightly update has not run in over 36 hours - check the Actions tab"
     el.hidden = false
   }).catch(() => {})
+
+  // boot() never reaches renderMoves(), so the rows are named here - they are
+  // on screen from page load, before a colour has been picked
+  renderPlayers()
 
   const verEl = document.getElementById("model-version")
   if (verEl && styleModel && styleModel.version) {

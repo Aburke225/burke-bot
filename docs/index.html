@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=41">
+  <link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
   <div class="wrap">
@@ -36,10 +36,12 @@
 
     <main class="layout">
       <section class="board-col">
-        <div class="player" id="pl-top" hidden>
+        <div class="player" id="pl-top">
           <span class="avatar" id="av-top"></span>
-          <span class="pname" id="nm-top"></span>
-          <span class="caps" id="cap-top"></span>
+          <span class="pinfo">
+            <span class="pname" id="nm-top"></span>
+            <span class="caps" id="cap-top"></span>
+          </span>
         </div>
         <div class="board-wrap">
           <span class="eval-num" id="eval-num" hidden>0.0</span>
@@ -67,10 +69,12 @@
             <button id="again" class="btn">Play again</button>
           </div>
         </div>
-        <div class="player" id="pl-bot" hidden>
+        <div class="player" id="pl-bot">
           <span class="avatar" id="av-bot"></span>
-          <span class="pname" id="nm-bot"></span>
-          <span class="caps" id="cap-bot"></span>
+          <span class="pinfo">
+            <span class="pname" id="nm-bot"></span>
+            <span class="caps" id="cap-bot"></span>
+          </span>
         </div>
       </section>
 
@@ -135,6 +139,6 @@
       render();
     })();
   </script>
-  <script type="module" src="app.js?v=57"></script>
+  <script type="module" src="app.js?v=59"></script>
 </body>
 </html>
