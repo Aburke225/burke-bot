@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=47">
+  <link rel="stylesheet" href="style.css?v=48">
 </head>
 <body>
   <div class="wrap">
@@ -34,25 +34,6 @@
       <p class="tagline">A bot built from every chess game I've ever played. It opens like me, attacks like me, and blunders like me.</p>
     </header>
 
-    <!-- Outline for the captured glyphs. feMorphology dilates the alpha equally
-         in every direction, so the ring is concentric; the flood colour comes
-         from CSS so it still follows the theme. -->
-    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
-      <defs>
-        <filter id="pc-edge-b" x="-30%" y="-30%" width="160%" height="160%">
-          <feMorphology in="SourceAlpha" operator="dilate" radius="0.7" result="fat"/>
-          <feFlood result="col"/>
-          <feComposite in="col" in2="fat" operator="in" result="edge"/>
-          <feMerge><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <filter id="pc-edge-w" x="-30%" y="-30%" width="160%" height="160%">
-          <feMorphology in="SourceAlpha" operator="dilate" radius="0.7" result="fat"/>
-          <feFlood result="col"/>
-          <feComposite in="col" in2="fat" operator="in" result="edge"/>
-          <feMerge><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-    </svg>
 
     <main class="layout">
       <section class="board-col">
@@ -159,6 +140,6 @@
       render();
     })();
   </script>
-  <script type="module" src="app.js?v=63"></script>
+  <script type="module" src="app.js?v=64"></script>
 </body>
 </html>

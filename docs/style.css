@@ -411,14 +411,14 @@ footer a { color: var(--ink-2); }
   flex: none; width: var(--player-h); height: var(--player-h);
   border-radius: 8px; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  background: var(--surface-2); border: 1px solid var(--border);
+  /* no border: both avatars set it to their own background colour anyway, so it
+     only shrank the drawing by a pixel a side and added a compositing edge */
+  background: var(--sq-dark); border: 0;
 }
 .avatar svg { width: 100%; height: 100%; display: block; shape-rendering: geometricPrecision; }
 /* The bot wears a piece; the challenger wears a person. Two different KINDS of
    thing, so they are never mistaken for each other at a glance. */
-.avatar.bot { background: var(--sq-dark); border-color: var(--sq-dark); }
 
-.avatar.human { background: var(--sq-dark); border-color: var(--sq-dark); }
 .pname {
   font-size: 0.92rem; font-weight: 600; color: var(--ink); white-space: nowrap;
   /* the body face is monospace, so a plain space between "Burke" and "Bot" is a
@@ -437,16 +437,20 @@ footer a { color: var(--ink-2); }
    and the four compounded into a lopsided smear with the piece off-centre in
    it. feMorphology grows the alpha equally in every direction instead, so the
    piece sits concentric in its ring. */
-/* SVG filters composite in linearRGB by DEFAULT - that is the spec, not a
-   browser quirk - so a flood declared as rgb(170,184,165) was being painted
-   through linear-space maths and came out a different colour from the +N text
-   beside it, which is plain CSS. sRGB makes the painted edge equal the declared
-   one. Both edges now read the same token the badge does, so they cannot drift
-   apart again. */
-#pc-edge-b, #pc-edge-w { color-interpolation-filters: sRGB; }
-#pc-edge-b feFlood, #pc-edge-w feFlood { flood-color: var(--ink-2); }
-.cap-group.cap-b svg { filter: url(#pc-edge-b); }
-.cap-group.cap-w svg { filter: url(#pc-edge-w); }
+/* The outline was an feMorphology dilate, which is what made it grainy:
+   morphology operates on the alpha channel, and dilating a channel that is
+   already anti-aliased quantises those partial edge pixels into chunky steps.
+   Stacked drop-shadows at ZERO offset give the same ring without that - each
+   pass is a Gaussian on the alpha, so the edge stays smooth, and with no offset
+   there is no direction for the four-shadow version's lopsidedness to come
+   from. CSS filter functions also work in sRGB already, so the painted colour
+   equals --ink-2 with no colour-space correction needed. Both piece colours now
+   take the same grey, so one rule covers them. */
+.cap-group svg {
+  filter: drop-shadow(0 0 .5px var(--ink-2))
+          drop-shadow(0 0 .5px var(--ink-2))
+          drop-shadow(0 0 .5px var(--ink-2));
+}
 .adv {
   font-size: 0.8rem; font-weight: 700; color: var(--ink-2);
   font-variant-numeric: tabular-nums; margin-left: 0.2rem;

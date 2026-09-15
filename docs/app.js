@@ -301,14 +301,18 @@ const ICON_VIEWBOX = "-1.04 -1.04 26.09 26.09"
 const HUMAN_AVATAR = [
   '<svg viewBox="' + ICON_VIEWBOX + '" aria-hidden="true">',
   '<g fill="#e9ecd6">',
-  '<circle cx="12" cy="6.2" r="3.6"/>',
-  '<path d="M8.5 10.7h7l-.8 2H9.3z"/>',
-  '<path d="M9.4 12.5C9.4 15.5 8 17.3 6.4 18.5H17.6C16 17.3 14.6 15.5 14.6 12.5Z"/>',
-  '<path d="M5.4 18.3h13.2a1.1 1.1 0 0 1 1.1 1.1v1.5H4.3v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
+  // Head up from r 3.6 to 4.2. The 0.9-unit gap he picked is preserved, so the
+  // collar and everything under it moves down with the head's new bottom edge,
+  // and the face grows with it - bigger features are also less of them per
+  // pixel, which is the other half of the graininess.
+  '<circle cx="12" cy="6.4" r="4.2"/>',
+  '<path d="M8.5 11.5h7l-.8 2H9.3z"/>',
+  '<path d="M9.4 13.3C9.4 16.3 8 18.1 6.4 19.3H17.6C16 18.1 14.6 16.3 14.6 13.3Z"/>',
+  '<path d="M5.4 19.1h13.2a1.1 1.1 0 0 1 1.1 1.1v1.5H4.3v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
   '</g>',
-  '<g fill="#527a4b"><circle cx="10.3" cy="5.2" r=".78"/><circle cx="13.7" cy="5.2" r=".78"/></g>',
-  '<path d="M10.55 7.4Q12 8.55 13.45 7.4" fill="none" stroke="#527a4b" ' +
-    'stroke-width="1.15" stroke-linecap="round"/>',
+  '<g fill="#527a4b"><circle cx="10.15" cy="5.3" r=".85"/><circle cx="13.85" cy="5.3" r=".85"/></g>',
+  '<path d="M10.4 7.8Q12 9.1 13.6 7.8" fill="none" stroke="#527a4b" ' +
+    'stroke-width="1.25" stroke-linecap="round"/>',
   '</svg>',
 ].join("")
 const PIECE_VIEWBOX = "6 3 28 34"   // crops the sprite tile's padding
