@@ -1133,12 +1133,12 @@ async function boot() {
     const SPK = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
     const ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       SPK + '<path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
-    // the slash takes the WAVES' place rather than cutting across the speaker:
+    // a small x takes the WAVES' place rather than cutting across the speaker:
     // a full diagonal fragments the speaker into unreadable pieces at 18px,
-    // while this leaves it whole and keeps it in the same spot in both states,
-    // so toggling only swaps waves for slash
+    // while this leaves it whole and in the same spot in both states, so
+    // toggling only swaps waves for x
     const OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      SPK + '<line x1="14" y1="18.5" x2="21.5" y2="6.5"/></svg>'
+      SPK + '<line x1="16.2" y1="9.4" x2="21.3" y2="14.6"/><line x1="21.3" y1="9.4" x2="16.2" y2="14.6"/></svg>'
     const renderSound = () => {
       const off = sfx.isMuted()
       soundBtn.innerHTML = off ? OFF : ON
