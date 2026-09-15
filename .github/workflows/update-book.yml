@@ -48,18 +48,29 @@ jobs:
             echo "changed=yes" >> "$GITHUB_OUTPUT"
           fi
 
-      # no engine install: the trainer analyses with the site's own vendored
-      # WASM stockfish, run through node (preinstalled on the runner)
+      # no engine install: the analysis runs the site's own vendored WASM
+      # stockfish through node (preinstalled on the runner), so play and
+      # training can never drift onto different engines.
+      # Three stages now, deliberately split: the engine pass is the expensive,
+      # cacheable half, and feature extraction is the cheap, re-runnable half.
+      - name: analyse the games (engine pass)
+        if: steps.gate.outputs.changed == 'yes'
+        run: python pipeline/analyse.py
+
+      - name: extract v9 features
+        if: steps.gate.outputs.changed == 'yes'
+        run: python pipeline/build_examples_v9.py
+
       - name: retrain the style model
         if: steps.gate.outputs.changed == 'yes'
-        run: python pipeline/train_style.py
+        run: python pipeline/train_v9.py
 
       - name: commit and push
         if: steps.gate.outputs.changed == 'yes'
         run: |
           git config user.name "Andrew Burke"
           git config user.email "aburke225@berkeley.edu"
-          git add docs/book.json docs/stats.json docs/style.json pipeline/games-fingerprint.txt
+          git add docs/book.json docs/stats.json docs/style-v9.json pipeline/games-fingerprint.txt
           if [ -f pipeline/site-games.json ]; then git add pipeline/site-games.json; fi
           if git diff --cached --quiet; then
             echo "nothing to commit"

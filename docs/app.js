@@ -28,6 +28,11 @@ const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/ches
 // search depth for candidates - a contract with pipeline/train_style.py
 // (training must analyse at the depth the site plays at; retrain after changing)
 const DEPTH = 5
+// 20 candidates, not 10: 11.6% of his real moves rank 10th or worse, and those
+// carry a disproportionate share of his error. A contract with analyse.py.
+const MULTIPV = 20
+// his perceptual horizon - a contract with analyse.py's HORIZON_DEPTH
+const HORIZON_DEPTH = 2
 // The eval bar is NOT the bot's view of the position - it is the honest one,
 // so it searches far deeper than the bot plays. The model never touches it:
 // the number is Stockfish's own score for the position, full stop. Depth 5
@@ -98,7 +103,21 @@ const engine = (() => {
     // wide enough to include the genuinely bad moves a human would play
     useMultipv() {
       worker.postMessage("setoption name Skill Level value 20")
-      worker.postMessage("setoption name MultiPV value 10")
+      worker.postMessage("setoption name MultiPV value " + MULTIPV)
+    },
+    // the same position seen from HIS horizon. v9's three strongest features
+    // are built from this, not from the depth-5 score: he responds to how bad
+    // a move LOOKS two ply out and is measurably blind to the rest.
+    horizon(fen) {
+      const run = () => new Promise(res => {
+        lines = {}
+        onBest = res
+        worker.postMessage("position fen " + fen)
+        worker.postMessage("go depth " + HORIZON_DEPTH)
+      })
+      const p = queue.then(run)
+      queue = p.then(() => {}, () => {})
+      return p
     },
     bestMove(fen) {
       const run = () => new Promise(res => {
@@ -745,6 +764,372 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
   return x
 }
 
+// ---------- the v9 feature contract (57 numbers per candidate) ----------
+// This is one half of a CONTRACT; the other half is pipeline/features_v9.py.
+// The two must produce identical vectors or the bot plays a different game
+// than the one it was trained on. pipeline/parity_v9.mjs checks that.
+//
+// The organising idea: the model only sees what Andrew can see. Every
+// score-derived feature is built from the DEPTH-2 evaluation, never depth 5.
+// Measured on his games, his choices track how bad a move LOOKS at his horizon
+// (weight -0.78) and are statistically blind to the badness only a deeper
+// search reveals - which is exactly why the bot can now make the quiet mistake
+// that only costs material several moves later.
+
+const V9_N = 57
+const V9_PIECE_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+// a king ATTACKER is worth 100, not 0. v8 used 0 and therefore called every
+// defended piece beside the enemy king "hanging".
+const V9_ATTACKER_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 }
+const V9_ORDER = ["p", "n", "b", "r", "q", "k"]
+const V9_HOME = {
+  w: { n: ["b1", "g1"], b: ["c1", "f1"], r: ["a1", "h1"] },
+  b: { n: ["b8", "g8"], b: ["c8", "f8"], r: ["a8", "h8"] },
+}
+const V9_FIANCHETTO = { w: ["b2", "g2"], b: ["b7", "g7"] }
+
+const sqFile = (s) => s.charCodeAt(0) - 97
+const sqRank = (s) => s.charCodeAt(1) - 49
+const mkSq = (f, r) => String.fromCharCode(97 + f) + (r + 1)
+const cheb = (a, b) => Math.max(Math.abs(sqFile(a) - sqFile(b)), Math.abs(sqRank(a) - sqRank(b)))
+
+// attacked, and not adequately defended (king attacker counts 100)
+function enPriseV9(sq, owner, opp) {
+  const atk = chess.attackers(sq, opp)
+  if (!atk.length) return false
+  if (!chess.isAttacked(sq, owner)) return true
+  const pc = chess.get(sq)
+  if (!pc) return false
+  let cheapest = 999
+  for (const a of atk) {
+    const ap = chess.get(a)
+    if (ap) cheapest = Math.min(cheapest, V9_ATTACKER_VAL[ap.type])
+  }
+  return cheapest < V9_PIECE_VAL[pc.type]
+}
+
+function neighbours(sq) {
+  const f = sqFile(sq), r = sqRank(sq), out = []
+  for (let df = -1; df <= 1; df++) {
+    for (let dr = -1; dr <= 1; dr++) {
+      if (!df && !dr) continue
+      const nf = f + df, nr = r + dr
+      if (nf >= 0 && nf <= 7 && nr >= 0 && nr <= 7) out.push(mkSq(nf, nr))
+    }
+  }
+  return out
+}
+
+// everything true of the POSITION rather than of one candidate, computed once
+function decisionContextV9() {
+  const hist = chess.history({ verbose: true })
+  const oppLast = hist[hist.length - 1]
+  const myLast = hist[hist.length - 2]
+  const me = chess.turn()
+  const opp = me === "w" ? "b" : "w"
+  const mineLast = myLast && myLast.color === me ? myLast : null
+  const castling = chess.fen().split(" ")[2]
+
+  const cells = []
+  for (const row of chess.board()) for (const c of row) if (c) cells.push(c)
+
+  let pieceCount = 0, npm = 0, mine = 0, theirs = 0
+  let myKing = null, enemyKing = null
+  const ownPawnRanks = [[], [], [], [], [], [], [], []]
+  const enemyPawnRanks = [[], [], [], [], [], [], [], []]
+  for (const c of cells) {
+    pieceCount++
+    const v = V9_PIECE_VAL[c.type]
+    if (c.type !== "p" && c.type !== "k") npm += v
+    if (c.color === me) mine += v; else theirs += v
+    if (c.type === "k") { if (c.color === me) myKing = c.square; else enemyKing = c.square }
+    if (c.type === "p") {
+      (c.color === me ? ownPawnRanks : enemyPawnRanks)[sqFile(c.square)].push(sqRank(c.square))
+    }
+  }
+
+  let kingExposure = 0
+  const shield = new Set()
+  let castled = false
+  if (myKing) {
+    const seen = new Set()
+    for (const sq of neighbours(myKing)) for (const a of chess.attackers(sq, opp)) seen.add(a)
+    kingExposure = seen.size
+    const kf = sqFile(myKing), kr = sqRank(myKing)
+    const homeRank = me === "w" ? 0 : 7, second = me === "w" ? 1 : 6
+    castled = (kr === homeRank || kr === second) && [0, 1, 2, 5, 6, 7].includes(kf)
+    const step = me === "w" ? 1 : -1
+    for (const f of [kf - 1, kf, kf + 1]) {
+      if (f < 0 || f > 7) continue
+      for (const d of [1, 2]) {
+        const r = kr + step * d
+        if (r >= 0 && r <= 7) shield.add(mkSq(f, r))
+      }
+    }
+  }
+
+  let zone = [], zoneBefore = 0
+  if (enemyKing) {
+    zone = neighbours(enemyKing)
+    const seen = new Set()
+    for (const sq of zone) for (const a of chess.attackers(sq, me)) seen.add(a)
+    zoneBefore = seen.size
+  }
+
+  // pieces of mine the opponent's LAST move put en prise
+  const fresh = []
+  if (oppLast) {
+    for (const c of cells) {
+      if (c.color !== me || !"nbrq".includes(c.type)) continue
+      if (chess.attackers(c.square, opp).includes(oppLast.to) && enPriseV9(c.square, me, opp)) {
+        fresh.push(c.square)
+      }
+    }
+  }
+
+  const prevOppCapTo = oppLast && oppLast.captured ? oppLast.to : null
+  let recapN = 0, recapMin = null
+  const legal = chess.moves({ verbose: true })
+  if (prevOppCapTo) {
+    const vals = legal.filter(m => m.to === prevOppCapTo && m.captured)
+                      .map(m => V9_PIECE_VAL[m.piece])
+    recapN = vals.length
+    if (vals.length) recapMin = Math.min(...vals)
+  }
+
+  return {
+    me, opp,
+    prevMyTo: mineLast ? mineLast.to : null,
+    prevOppCapTo,
+    lastMoveTo: oppLast ? oppLast.to : null,
+    inCheck: chess.inCheck(),
+    canCastle: me === "w" ? /[KQ]/.test(castling) : /[kq]/.test(castling),
+    pieceCount, npm,
+    phase: 1 - pieceCount / 32,
+    imbalance: Math.sqrt(Math.min(Math.abs(mine - theirs), 9) / 9),
+    ownPawnRanks, enemyPawnRanks,
+    myKing, enemyKing, kingExposure, shield, castled,
+    zone, zoneBefore, fresh, recapN, recapMin,
+  }
+}
+
+// impute missing horizon scores, then take the best - in that order
+function horizonScores(ucis, shByUci) {
+  const present = ucis.map(u => shByUci[u]).filter(v => v !== undefined && v !== null)
+  const floor = present.length ? Math.min(...present) : null
+  const out = ucis.map(u => {
+    const v = shByUci[u]
+    return (v === undefined || v === null) ? floor : v
+  })
+  const usable = out.filter(v => v !== null)
+  return { sh: out, bestSh: usable.length ? Math.max(...usable) : null }
+}
+
+function moveFeaturesV9(uci, ctx, sh, bestSh, rank) {
+  const from = uci.slice(0, 2), to = uci.slice(2, 4)
+  const me = ctx.me, opp = ctx.opp
+  const x = new Array(V9_N).fill(0)
+
+  const pre = chess.get(from)
+  if (!pre) return null
+  const mover = pre.type
+  const moverVal = V9_PIECE_VAL[mover]
+  const toAttacked = chess.isAttacked(to, opp)
+  const fromAttacked = chess.isAttacked(from, opp)
+  const danger = enPriseV9(from, me, opp)
+  const enemyPawnsAttackTo = chess.attackers(to, opp).some(a => {
+    const p = chess.get(a); return p && p.type === "p"
+  })
+
+  const played = tryMove({ from, to, promotion: uci.slice(4) || undefined })
+  if (!played) return null
+  const isCapture = !!played.captured
+  const isCastle = played.flags.includes("k") || played.flags.includes("q")
+  const givesCheck = chess.inCheck()
+  const tf = sqFile(to), tr = sqRank(to), ff = sqFile(from), fr = sqRank(from)
+  const fwd = me === "w" ? 1 : -1
+
+  // post-move facts, gathered while the move is on the board
+  const landedHanging = enPriseV9(to, me, opp)
+  let count = landedHanging ? 1 : 0
+  let others = false
+  let ignoresFresh = false
+  let bestAny = 0, bestLoose = 0
+  const postCells = []
+  for (const row of chess.board()) for (const c of row) if (c) postCells.push(c)
+  for (const c of postCells) {
+    if (c.color === me && "nbrq".includes(c.type) && c.square !== to) {
+      if (enPriseV9(c.square, me, opp)) { others = true; count++ }
+    }
+    if (c.color === opp && c.type !== "k" && chess.attackers(c.square, me).includes(to)) {
+      const v = V9_PIECE_VAL[c.type]
+      if (v > bestAny) bestAny = v
+      if ((!chess.isAttacked(c.square, opp) || v > moverVal) && v > bestLoose) bestLoose = v
+    }
+  }
+  for (const sq of ctx.fresh) {
+    if (sq === from) continue
+    const p = chess.get(sq)
+    if (p && p.color === me && enPriseV9(sq, me, opp)) { ignoresFresh = true; break }
+  }
+  let unsafeCheck = 0
+  if (givesCheck && ctx.enemyKing) {
+    if (chess.attackers(to, opp).includes(ctx.enemyKing) && !chess.isAttacked(to, me)) unsafeCheck = 1
+  }
+  let zonePressure = 0
+  if (ctx.zone.length) {
+    const seen = new Set()
+    for (const sq of ctx.zone) for (const a of chess.attackers(sq, me)) seen.add(a)
+    if (seen.size > ctx.zoneBefore) zonePressure = 1
+  }
+  let castlePressure = 0, castleNoShield = 0
+  if (isCastle) {
+    let kd = null
+    for (const c of postCells) if (c.type === "k" && c.color === me) kd = c.square
+    if (kd) {
+      const seen = new Set()
+      for (const sq of neighbours(kd)) for (const a of chess.attackers(sq, opp)) seen.add(a)
+      castlePressure = Math.min(seen.size, 3) / 3
+      const kf2 = sqFile(kd), kr2 = sqRank(kd)
+      let shieldPawns = 0
+      for (const f of [kf2 - 1, kf2, kf2 + 1]) {
+        if (f < 0 || f > 7) continue
+        for (let r = 0; r <= 7; r++) {
+          if ((r - kr2) * fwd <= 0) continue
+          const p = chess.get(mkSq(f, r))
+          if (p && p.color === me && p.type === "p") { shieldPawns++; break }
+        }
+      }
+      castleNoShield = (3 - shieldPawns) / 3
+    }
+  }
+  chess.undo()
+
+  // ---- 0-2: perception ----
+  if (bestSh !== null && sh !== null) {
+    const raw = Math.max(0, (bestSh - sh) / 100)
+    x[0] = Math.log1p(Math.min(raw, 5))
+    x[2] = 1 / (1 + Math.exp(-Math.max(-2000, Math.min(2000, sh)) / 150))
+  }
+  const quiet = (isCapture || givesCheck) ? 0 : 1
+  x[1] = x[0] * quiet
+
+  // ---- 3-13 ----
+  x[3] = rank / 4
+  const forcing = (isCapture || givesCheck || played.promotion) ? 1 : 0
+  x[4] = forcing
+  x[5] = isCapture ? 1 : 0
+  x[6] = givesCheck ? 1 : 0
+  x[7] = played.promotion ? 1 : 0
+  x[8] = isCastle ? 1 : 0
+  if (isCapture) x[9] = V9_PIECE_VAL[played.captured] / 9
+  x[10] = (isCapture && toAttacked) ? 1 : 0
+  x[11] = (isCapture && toAttacked && V9_PIECE_VAL[played.captured] < moverVal) ? 1 : 0
+  x[12] = (isCapture && ctx.prevOppCapTo === to) ? 1 : 0
+  x[13] = (x[12] && ctx.recapN > 1 && ctx.recapMin !== null && moverVal === ctx.recapMin) ? 1 : 0
+
+  // ---- 14-22 ----
+  x[14 + V9_ORDER.indexOf(mover)] = 1
+  x[20] = (Math.abs(tf - 3.5) + Math.abs(tr - 3.5)) / 7
+  const forward = (tr - fr) * fwd
+  x[21] = forward > 0 ? 1 : 0
+  x[22] = forward < 0 ? 1 : 0
+
+  // ---- 23-32 ----
+  x[23] = (mover === "n" || mover === "b") ? x[22] : 0
+  x[24] = (mover === "n" && (tf === 0 || tf === 7 || tr === 0 || tr === 7)) ? 1 : 0
+  x[25] = (mover === "p" && Math.abs(tr - fr) === 2) ? 1 : 0
+  if (mover === "p" && !isCapture) {
+    const back = tr - fwd
+    if (back >= 0 && back <= 7) {
+      for (const f of [tf - 1, tf + 1]) {
+        if (f < 0 || f > 7) continue
+        const p = chess.get(mkSq(f, back))
+        if (p && p.color === me && p.type === "p") { x[26] = 1; break }
+      }
+    }
+  }
+  x[27] = (mover === "p" && !isCapture && (ff === 0 || ff === 7)) ? 1 : 0
+  const ramp = Math.max(0, (12 - ctx.pieceCount) / 10)
+  x[28] = ramp * ((mover === "p" && !isCapture) ? 1 : 0)
+  x[29] = ((V9_HOME[me][mover] || []).includes(from)) ? 1 : 0
+  x[30] = (mover === "b" && V9_FIANCHETTO[me].includes(to)) ? 1 : 0
+  if (mover === "r") {
+    for (const r of ctx.ownPawnRanks[tf]) { if ((r - tr) * fwd > 0) { x[31] = 1; break } }
+  }
+  if (!enemyPawnsAttackTo) {
+    let reachable = false
+    for (const f of [tf - 1, tf + 1]) {
+      if (f < 0 || f > 7) continue
+      for (const r of ctx.enemyPawnRanks[f]) { if ((r - tr) * fwd > 0) { reachable = true; break } }
+      if (reachable) break
+    }
+    x[32] = reachable ? 0 : 1
+  }
+
+  // ---- 33-42 ----
+  x[33] = fromAttacked ? 1 : 0
+  x[34] = toAttacked ? 1 : 0
+  x[35] = landedHanging ? 1 : 0
+  x[36] = others ? 1 : 0
+  x[37] = count
+  x[38] = ("nbrq".includes(mover) && !isCapture && enemyPawnsAttackTo) ? 1 : 0
+  x[39] = (danger && !landedHanging) ? moverVal / 9 : 0
+  x[40] = ignoresFresh ? 1 : 0
+  x[41] = (bestAny >= 3 && !landedHanging) ? 1 : 0
+  x[42] = bestLoose / 9
+
+  // ---- 43-44 ----
+  if (ctx.lastMoveTo) x[43] = (6 - Math.min(cheb(to, ctx.lastMoveTo), 6)) / 6
+  if (ctx.prevMyTo) x[44] = (4 - Math.min(cheb(to, ctx.prevMyTo), 4)) / 4
+
+  // ---- 45-50 ----
+  const kingMove = mover === "k" && !isCastle
+  if (kingMove && !ctx.inCheck) {
+    if (ctx.canCastle) x[45] = 1
+    else { x[46] = ctx.npm / 62; x[47] = Math.min(ctx.kingExposure, 3) / 3 }
+  }
+  x[48] = (mover === "p" && !isCapture && ctx.shield.has(from) && ctx.castled) ? 1 : 0
+  x[49] = unsafeCheck
+  x[50] = zonePressure
+
+  // ---- 51-56 ----
+  x[51] = ctx.phase * forcing
+  x[52] = ctx.imbalance * forcing
+  x[53] = ctx.phase * (kingMove ? 1 : 0)
+  x[54] = ctx.imbalance * x[0]
+  x[55] = castlePressure
+  x[56] = castleNoShield
+  return x
+}
+
+// sample from the v9 policy. No salience guards: what they used to patch over
+// is now carried by real features (ignores_fresh_threat, king_walk,
+// quiet_edge_pawn, hangs_*), fitted at his own measured rates.
+function stylePickV9(lines, shByUci) {
+  if (!styleModel) return null
+  const cands = Object.keys(lines).sort((a, b) => a - b).map(k => lines[k])
+  if (cands.length < 2) return null
+  const ctx = decisionContextV9()
+  const { sh, bestSh } = horizonScores(cands.map(c => c.uci), shByUci)
+  const w = styleModel.weights
+  const scored = []
+  for (let i = 0; i < cands.length; i++) {
+    const x = moveFeaturesV9(cands[i].uci, ctx, sh[i], bestSh, i)
+    if (!x) continue
+    let z = 0
+    for (let j = 0; j < w.length; j++) z += w[j] * x[j]
+    scored.push({ uci: cands[i].uci, z })
+  }
+  if (scored.length < 2) return null
+  const zmax = Math.max(...scored.map(c => c.z))
+  let total = 0
+  for (const c of scored) { c.p = Math.exp((c.z - zmax) / PLAY_TEMP); total += c.p }
+  let r = Math.random() * total
+  for (const c of scored) { r -= c.p; if (r <= 0) return c.uci }
+  return scored[0].uci
+}
+
 // sample a move from the model's probabilities over the engine's candidates
 function stylePick(lines) {
   if (!styleModel) return null
@@ -899,12 +1284,30 @@ async function botMove(board, id) {
   }
   if (!played) {
     await engine.ready
-    const result = await engine.bestMove(chess.fen())
+    const fen = chess.fen()
+    const result = await engine.bestMove(fen)
     if (id !== gameId) return
     const elapsed = Date.now() - started
     if (elapsed < 500) await sleep(500 - elapsed)
     if (id !== gameId) return
-    const uci = (styleModel && stylePick(result.lines)) || result.uci
+    let uci = result.uci
+    if (styleModel && styleModel.features === "v9") {
+      // v9 needs a second, shallow look at the same position - his horizon.
+      // If it fails the features collapse to constants and the bot would just
+      // follow the engine's ordering, so say so rather than failing silently.
+      let shBy = null
+      try {
+        const h = await engine.horizon(fen)
+        if (id !== gameId) return
+        shBy = {}
+        for (const k of Object.keys(h.lines)) shBy[h.lines[k].uci] = h.lines[k].cp
+      } catch (e) {
+        console.warn("horizon search failed; falling back to the engine's move", e)
+      }
+      if (shBy) uci = stylePickV9(result.lines, shBy) || result.uci
+    } else if (styleModel) {
+      uci = stylePick(result.lines) || result.uci
+    }
     window.bbLast = { pick: uci, best: result.uci, lines: result.lines }
     played = tryMove({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4) || undefined })
     if (!played && uci !== result.uci) {
@@ -1114,7 +1517,7 @@ function renderStats(stats) {
 
 async function boot() {
   const [bookRes, statsRes, styleRes, openingsRes] = await Promise.all([
-    fetch("book.json"), fetch("stats.json"), fetch("style.json?v=8").catch(() => null),
+    fetch("book.json"), fetch("stats.json"), fetch("style-v9.json?v=1").catch(() => null),
     fetch("openings.json").catch(() => null),
   ])
   book = await bookRes.json()
@@ -1134,10 +1537,12 @@ async function boot() {
   try {
     if (styleRes && styleRes.ok) styleModel = await styleRes.json()
   } catch (e) { styleModel = null }
-  const okModel = styleModel && styleModel.features === "v8" &&
+  const okModel = styleModel &&
+    (styleModel.features === "v9" || styleModel.features === "v8") &&
     Array.isArray(styleModel.weights) && Array.isArray(styleModel.active) &&
     styleModel.active.length === styleModel.weights.length &&
-    styleModel.active.every(i => Number.isInteger(i) && i >= 0 && i < 30)
+    styleModel.active.every(i => Number.isInteger(i) && i >= 0 &&
+      i < (styleModel.features === "v9" ? 57 : 30))
   if (okModel) {
     engine.ready.then(() => engine.useMultipv())
   } else {
