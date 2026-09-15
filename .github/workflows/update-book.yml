@@ -2,7 +2,11 @@ name: update book
 
 on:
   schedule:
-    - cron: "0 13 * * *" # daily, 13:00 UTC = 6am PDT / 5am PST
+    # Off the top of the hour on purpose. A huge share of every cron on GitHub
+    # is set to :00, and scheduled runs queue behind that spike - the four runs
+    # so far landed 3h21m to 5h20m late. An odd minute misses the herd. It does
+    # not make the schedule a guarantee; nothing does.
+    - cron: "17 13 * * *" # daily, 13:17 UTC = 6:17am PDT / 5:17am PST
   workflow_dispatch:
 
 permissions:

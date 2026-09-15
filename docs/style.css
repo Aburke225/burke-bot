@@ -319,8 +319,14 @@ footer a { color: var(--ink-2); }
 }
 .eval-bar.flip .eval-fill { bottom: auto; top: 0; }
 .eval-num {
-  position: absolute; left: 0; width: 2.1rem; top: 50%; transform: translateY(-50%);
-  text-align: right; font-size: 0.72rem; font-weight: 700;
+  /* The box grows LEFT, not right: left goes negative by exactly what width
+     gains, so the right edge stays at 2.1rem and the gap to the bar is
+     untouched. A five-character eval (-10.2) needed 34.6px against a 33.6px
+     box even at the old size, so it was already spilling; at 0.82rem it needs
+     39.4px and now has 40.3px. Phones override both back - see the 520px
+     block, which must restate left or it would inherit the negative one. */
+  position: absolute; left: -0.42rem; width: 2.52rem; top: 50%; transform: translateY(-50%);
+  text-align: right; font-size: 0.82rem; font-weight: 700;
   white-space: nowrap; color: var(--ink);
 }
 /* while an overlay is up, the bar and number dim like the board does -
@@ -448,5 +454,5 @@ footer a { color: var(--ink-2); }
   .header-actions { top: 1.3rem; }
   .top { padding-top: 2.6rem; }
   .eval-bar { left: calc(1.45rem + 4px); width: 11px; }
-  .eval-num { width: 1.45rem; font-size: 0.6rem; }
+  .eval-num { left: 0; width: 1.45rem; font-size: 0.6rem; }
 }
