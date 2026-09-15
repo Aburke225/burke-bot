@@ -199,6 +199,9 @@ function renderMoves() {
   movelistEl.innerHTML = ""
   for (let i = 0; i < hist.length; i += 2) {
     const li = document.createElement("li")
+    const num = document.createElement("span"); num.className = "n"
+    num.textContent = (i / 2 + 1) + "."
+    li.appendChild(num)
     // the inner .t span lets the highlight hug the move text while the outer
     // span keeps its min-width so the columns stay aligned
     const w = document.createElement("span"); w.className = "w"; w.dataset.ply = i
@@ -246,158 +249,92 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms))
 // ---------- sounds (synthesized with WebAudio - no files, no licenses) ----------
 
 const sfx = (() => {
-  // Sounds are SYNTHESISED (no audio files in the repo, nothing to license),
-  // but they are played back through <audio> elements rather than straight out
-  // of WebAudio. That is deliberate: on iOS, WebAudio sits in the "ambient"
-  // category, which the phone's physical ring/silent switch mutes outright,
-  // while media played from an <audio> element is not. So each voice is
-  // rendered once into an OfflineAudioContext, encoded as a WAV blob, and
-  // handed to an <audio> element. Live WebAudio stays as the fallback for
-  // anything that fails, and for the instant before rendering finishes.
+  // Straight WebAudio, synthesised on the fly - no audio files in the repo and
+  // nothing to license. An earlier version rendered these to WAV and played
+  // them through <audio> elements to get around the iPhone's ring/silent
+  // switch; that turned out to be unreliable on a real phone, so it is gone.
+  // The trade-off is the honest one: with the silent switch on, iOS mutes
+  // WebAudio and the site is silent.
   let ctx = null
   const ac = () => ctx || (ctx = new (window.AudioContext || window.webkitAudioContext)())
 
   let muted = false
   try { muted = localStorage.getItem("bb-sound") === "off" } catch (e) {}
 
-  // --- synthesis, written against ANY context so one implementation serves
-  //     both the offline render and the live fallback. OfflineAudioContext
-  //     reports currentTime 0 before rendering, so the same offset works.
   // a piece landing, modeled on measurements of chess.com's real samples:
   // their move sound is PITCHED, not noise - a couple of damped tones near
   // 460+900Hz, ~1ms attack, dead within ~20ms, nothing below 300Hz or
   // above 2400Hz. So: a few exponentially damped sines, instantly muted.
-  function tockOn(c, when, freqs, weights, gain, tau = 0.004, dur = 0.05) {
-    const t = c.currentTime + when
-    const len = Math.floor(c.sampleRate * dur)
-    const attack = Math.max(1, Math.floor(c.sampleRate * 0.001))
-    const buf = c.createBuffer(1, len, c.sampleRate)
-    const d = buf.getChannelData(0)
-    const wsum = weights.reduce((a, b) => a + b, 0)
-    for (let i = 0; i < len; i++) {
-      const ts = i / c.sampleRate
-      const env = Math.min(1, i / attack) * Math.exp(-ts / tau)
-      let v = 0
-      for (let j = 0; j < freqs.length; j++) v += weights[j] * Math.sin(2 * Math.PI * freqs[j] * ts)
-      d[i] = (v / wsum) * env
-    }
-    const src = c.createBufferSource(); src.buffer = buf
-    const g = c.createGain(); g.gain.value = gain
-    src.connect(g); g.connect(c.destination)
-    src.start(t)
-  }
-  function blipOn(c, when, freq, dur, gain, slide = 0) {
-    const t = c.currentTime + when
-    const o = c.createOscillator(), g = c.createGain()
-    o.type = "sine"
-    o.frequency.setValueAtTime(freq, t)
-    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur)
-    g.gain.setValueAtTime(gain, t)
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
-    o.connect(g); g.connect(c.destination)
-    o.start(t); o.stop(t + dur + 0.02)
-  }
-
-  // frequencies/weights tuned so each synth's spectrum lands on the measured
-  // band profile of the matching chess.com sample; his picks from the tasting
-  // panel were A move, B capture, A castle, D check
-  const VOICES = {
-    move:    { dur: 0.10, render: c => tockOn(c, 0, [460, 900, 1280], [0.75, 1, 0.4], 0.5) },
-    capture: { dur: 0.12, render: c => tockOn(c, 0, [473, 938, 1103], [0.95, 1, 0.7], 0.63, 0.0065, 0.06) },
-    castle:  { dur: 0.24, render: c => { tockOn(c, 0, [200, 420, 750], [1, 0.75, 0.6], 0.5, 0.005, 0.06)
-                                         tockOn(c, 0.09, [230, 460, 780], [1, 0.75, 0.6], 0.5, 0.005, 0.06) } },
-    check:   { dur: 0.14, render: c => tockOn(c, 0, [882, 1260], [1, 0.6], 0.63, 0.0042, 0.07) },
-    promote: { dur: 0.30, render: c => { blipOn(c, 0, 440, 0.09, 0.1); blipOn(c, 0.09, 660, 0.13, 0.1) } },
-    start:   { dur: 0.32, render: c => { blipOn(c, 0, 392, 0.1, 0.1); blipOn(c, 0.1, 523, 0.15, 0.1) } },
-    end:     { dur: 0.36, render: c => { blipOn(c, 0, 523, 0.1, 0.1); blipOn(c, 0.1, 392, 0.18, 0.1) } },
-  }
-
-  function wavUrl(buf) {
-    const d = buf.getChannelData(0), n = d.length, sr = buf.sampleRate
-    const ab = new ArrayBuffer(44 + n * 2), view = new DataView(ab)
-    const str = (o, t) => { for (let i = 0; i < t.length; i++) view.setUint8(o + i, t.charCodeAt(i)) }
-    str(0, "RIFF"); view.setUint32(4, 36 + n * 2, true); str(8, "WAVE")
-    str(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true)
-    view.setUint16(22, 1, true); view.setUint32(24, sr, true)
-    view.setUint32(28, sr * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true)
-    str(36, "data"); view.setUint32(40, n * 2, true)
-    for (let i = 0; i < n; i++) {
-      const v = Math.max(-1, Math.min(1, d[i]))
-      view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true)
-    }
-    return URL.createObjectURL(new Blob([ab], { type: "audio/wav" }))
-  }
-
-  const els = {}
-  let primed = false
-  // rendering needs no user gesture, so it runs at load and the elements are
-  // ready to be primed the moment the first touch arrives
-  const ready = (async () => {
-    const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext
-    if (!OC) return
-    for (const [name, v] of Object.entries(VOICES)) {
-      try {
-        const oc = new OC(1, Math.ceil(44100 * v.dur), 44100)
-        v.render(oc)
-        const buf = await oc.startRendering()
-        const el = new Audio(wavUrl(buf))
-        el.preload = "auto"
-        els[name] = el
-      } catch (e) {}
-    }
-  })()
-
-  // iOS only lets an <audio> element play later if it has been played once
-  // inside a real gesture, so every voice gets a silent run on first touch
-  function prime() {
-    if (primed) return
-    primed = true
-    for (const el of Object.values(els)) {
-      try {
-        el.volume = 0
-        const p = el.play()
-        const settle = () => { try { el.pause(); el.currentTime = 0; el.volume = 1 } catch (e) {} }
-        if (p && p.then) p.then(settle, settle); else settle()
-      } catch (e) {}
-    }
-  }
-
-  function play(name) {
+  function tock(freqs, weights, gain, when = 0, tau = 0.004, dur = 0.05) {
     if (muted) return
-    const el = els[name]
-    if (el) {
-      try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); return } catch (e) {}
-    }
-    try { VOICES[name].render(ac()) } catch (e) {}  // fallback: straight WebAudio
+    try {
+      const c = ac(), t = c.currentTime + when
+      const len = Math.floor(c.sampleRate * dur)
+      const attack = Math.max(1, Math.floor(c.sampleRate * 0.001))
+      const buf = c.createBuffer(1, len, c.sampleRate)
+      const d = buf.getChannelData(0)
+      const wsum = weights.reduce((a, b) => a + b, 0)
+      for (let i = 0; i < len; i++) {
+        const ts = i / c.sampleRate
+        const env = Math.min(1, i / attack) * Math.exp(-ts / tau)
+        let v = 0
+        for (let j = 0; j < freqs.length; j++) v += weights[j] * Math.sin(2 * Math.PI * freqs[j] * ts)
+        d[i] = (v / wsum) * env
+      }
+      const src = c.createBufferSource(); src.buffer = buf
+      const g = c.createGain(); g.gain.value = gain
+      src.connect(g); g.connect(c.destination)
+      src.start(t)
+    } catch (e) {}
+  }
+  function blip(freq, dur, gain, when = 0, slide = 0) {
+    if (muted) return
+    try {
+      const c = ac(), t = c.currentTime + when
+      const o = c.createOscillator(), g = c.createGain()
+      o.type = "sine"
+      o.frequency.setValueAtTime(freq, t)
+      if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur)
+      g.gain.setValueAtTime(gain, t)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+      o.connect(g); g.connect(c.destination)
+      o.start(t); o.stop(t + dur + 0.02)
+    } catch (e) {}
   }
 
   return {
-    // WebAudio still gets unlocked for the fallback path; the <audio> elements
-    // get primed. Neither defeats the iPhone ring/silent switch on the WebAudio
-    // path, which is exactly why the <audio> path exists.
+    // iOS starts the context suspended, only honours resume() inside a real
+    // gesture, and wants a buffer actually played in that gesture; it also
+    // suspends again whenever the page goes to the background
     unlock() {
       try {
         const c = ac()
         if (c.state === "suspended") c.resume()
-        const s = c.createBufferSource()
-        s.buffer = c.createBuffer(1, 1, c.sampleRate)
-        s.connect(c.destination)
-        s.start(0)
+        const src = c.createBufferSource()
+        src.buffer = c.createBuffer(1, 1, c.sampleRate)
+        src.connect(c.destination)
+        src.start(0)
       } catch (e) {}
-      if (Object.keys(els).length) prime(); else ready.then(prime)
     },
     isMuted() { return muted },
     setMuted(on) {
       muted = !!on
       try { localStorage.setItem("bb-sound", muted ? "off" : "on") } catch (e) {}
     },
-    move() { play("move") },
-    capture() { play("capture") },
-    castle() { play("castle") },
-    check() { play("check") },
-    promote() { play("promote") },
-    start() { play("start") },
-    end() { play("end") },
+    // frequencies/weights tuned so each synth's spectrum lands on the
+    // measured band profile of the matching chess.com sample
+    // his picks from the tasting panel: A move, B capture, A castle, D check
+    move() { tock([460, 900, 1280], [0.75, 1, 0.4], 0.5) },
+    capture() { tock([473, 938, 1103], [0.95, 1, 0.7], 0.63, 0, 0.0065, 0.06) },
+    castle() { tock([200, 420, 750], [1, 0.75, 0.6], 0.5, 0, 0.005, 0.06); tock([230, 460, 780], [1, 0.75, 0.6], 0.5, 0.09, 0.005, 0.06) },
+    check() { tock([882, 1260], [1, 0.6], 0.63, 0, 0.0042, 0.07) },
+    // same damped-tock family as the moves, but a small two-step rise so
+    // turning sound back on is obviously not a piece landing
+    soundOn() { tock([540, 1030], [1, 0.5], 0.42, 0, 0.005, 0.05)
+                tock([760, 1440], [1, 0.5], 0.42, 0.07, 0.005, 0.05) },
+    promote() { blip(440, 0.09, 0.1); blip(660, 0.13, 0.1, 0.09) },
+    start() { blip(392, 0.1, 0.1); blip(523, 0.15, 0.1, 0.1) },
+    end() { blip(523, 0.1, 0.1); blip(392, 0.18, 0.1, 0.1) },
   }
 })()
 
@@ -1191,7 +1128,7 @@ async function boot() {
     const ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       SPK + '<path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
     const OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      SPK + '<path d="M19.07 4.93a10 10 0 0 1 0 14.14" opacity=".35"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07" opacity=".35"/><line x1="3" y1="21" x2="21" y2="3"/></svg>'
+      '<g transform="translate(6.5,0)">' + SPK + '</g><line x1="4" y1="20" x2="20" y2="4"/></svg>'
     const renderSound = () => {
       const off = sfx.isMuted()
       soundBtn.innerHTML = off ? OFF : ON
@@ -1203,7 +1140,7 @@ async function boot() {
       const turningOn = sfx.isMuted()
       sfx.setMuted(!turningOn)
       renderSound()
-      if (turningOn) { sfx.unlock(); sfx.move() }  // a click to confirm it's back
+      if (turningOn) { sfx.unlock(); sfx.soundOn() }
     })
     renderSound()
   }

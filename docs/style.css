@@ -30,12 +30,21 @@
 
 * { box-sizing: border-box; }
 
+/* On a desktop the type scales with the window exactly as the board does, so
+   the whole page keeps one set of proportions. A 1440x900 laptop is the
+   reference: 900 * 0.01778 = 16px, the browser default, so that view is
+   unchanged. Everything sized in rem follows automatically. Phones are left
+   out on purpose - a stacked layout wants normal, readable text. */
+@media (min-width: 861px) {
+  html { font-size: clamp(14px, 1.78vh, 24px); }
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -46,7 +55,7 @@ body {
   /* + the eval gutter, which is part of the board column but not part of the
      board, so the BOARD itself lands at lichess's 76-80% of viewport height */
   --board-max: clamp(360px, calc(74vh + 4.5rem), 1200px);
-  --eval-w: calc(2.1rem + 28px);
+  --eval-w: 3.85rem;  /* 2.1rem number + bar + gaps, all in rem so it scales */
 }
 /* boot veil: index.html adds .booting before first paint; app.js removes it
    once fonts + board + stats have settled, so the page fades in as one unit */
@@ -129,8 +138,7 @@ body {
 
 .board { width: 100%; aspect-ratio: 1 / 1; } /* reserve the square before the svg exists */
 
-.controls { display: flex; gap: 0.7rem; }
-.controls .btn { width: 100%; }
+.controls { display: flex; gap: 0.7rem; justify-content: flex-start; }
 .btn {
   font: inherit;
   font-size: 0.9rem;
@@ -191,7 +199,12 @@ body {
 }
 
 .movelist {
-  margin: 0; padding: 0 0 0 1.6rem;
+  margin: 0; padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1.4rem;
+  align-content: start;
   font-size: 0.88rem;
   overflow-y: auto;
   color: var(--ink-2);
@@ -199,7 +212,8 @@ body {
      for the moment before the first measurement, and on single-column layouts */
   max-height: var(--movelist-max, 240px);
 }
-.movelist li { padding: 0.06rem 0; break-inside: avoid; }
+.movelist li { padding: 0.06rem 0; display: flex; gap: 0.4rem; align-items: baseline; }
+.movelist .n { min-width: 2.2em; text-align: right; opacity: 0.75; }
 .movelist .w, .movelist .b { color: var(--ink); display: inline-block; min-width: 3.2em; }
 
 .stats-card dl { margin: 0; font-size: 0.85rem; }
@@ -209,11 +223,11 @@ body {
 
 footer {
   margin-top: 2.4rem;
-  padding-top: 1.1rem;
-  border-top: 1px solid var(--border);
   color: var(--ink-2);
   font-size: 0.82rem;
 }
+.foot-rule { grid-column: 1 / -1; border-top: 1px solid var(--border); }
+.foot-inner { padding-top: 1.1rem; }
 footer a { color: var(--ink-2); }
 
 .bb-me-input {
@@ -232,15 +246,9 @@ footer a { color: var(--ink-2); }
 /* the eval bar sits inside board-wrap so the overlays always cover the
    whole board (a flex-stretched wrap could end up 1px shorter than the
    JS-sized board svg); the number reads full-size to its left */
-/* on a big board the gutter grows a touch so the bar keeps its proportion */
-@media (min-height: 1000px) and (min-width: 1200px) {
-  .wrap { --eval-w: calc(2.4rem + 34px); }
-  .eval-bar { width: 18px; }
-  .eval-num { width: 2.4rem; font-size: 0.78rem; }
-}
 .board-wrap { position: relative; padding-left: var(--eval-w); }
 .eval-bar {
-  position: absolute; left: calc(2.1rem + 5px); top: 0; bottom: 0; width: 15px;
+  position: absolute; left: 2.41rem; top: 0; bottom: 0; width: 0.94rem;
   border-radius: 5px; overflow: hidden;
   background: #23261f; border: 1px solid var(--border);
 }
