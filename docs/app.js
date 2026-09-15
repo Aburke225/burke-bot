@@ -367,7 +367,7 @@ function renderPlayers() {
   document.getElementById("nm-top").textContent = "Burke Bot"
 
   if (avBot.dataset.set !== "human") { avBot.className = "avatar human"; avBot.innerHTML = HUMAN_AVATAR; avBot.dataset.set = "human" }
-  document.getElementById("nm-bot").textContent = signedIn ? "Burke" : "Challenger"
+  document.getElementById("nm-bot").textContent = signedIn ? "Burke" : "Pawnling"
 }
 
 function renderCaptures() {
