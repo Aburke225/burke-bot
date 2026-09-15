@@ -302,8 +302,32 @@ const HUMAN_AVATAR =
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<circle cx="12" cy="8" r="3.4"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>'
 const PIECE_VIEWBOX = "6 3 28 34"   // crops the sprite tile's padding
-const BOT_AVATAR =
-  '<svg viewBox="' + PIECE_VIEWBOX + '" aria-hidden="true"><use href="#wn"/></svg>'
+// Burke Bot's portrait: a machine wearing the board. The head is a rook's
+// battlement, the body the flared collar and plinth every chess piece stands
+// on, and the rest is robot - antenna, lit eyes behind a visor, a speaker
+// grille and a bolt at each temple. Drawn in the board's own two square
+// colours so it reads as a piece sitting on a dark square.
+const BOT_AVATAR = [
+  '<svg viewBox="0 0 24 24" aria-hidden="true">',
+  '<g fill="#e9ecd6">',
+  '<rect x="11.35" y="1.5" width="1.3" height="3.4" rx=".65"/>',
+  '<path d="M4.6 7.4V4.1h2.5v1.6h1.6V4.1h2.5v1.6h1.6V4.1h2.5v1.6h1.6V4.1h2.5v3.3z"/>',
+  '<rect x="4.6" y="6.8" width="14.8" height="9.6" rx="2.4"/>',
+  '<rect x="2.3" y="9.6" width="2" height="3.6" rx="1"/>',
+  '<rect x="19.7" y="9.6" width="2" height="3.6" rx="1"/>',
+  '<path d="M8.2 16.4h7.6l1.1 2.3H7.1z"/>',
+  '<path d="M5.9 19.5h12.2a1.1 1.1 0 0 1 1.1 1.1v1.4H4.8v-1.4a1.1 1.1 0 0 1 1.1-1.1z"/>',
+  '</g>',
+  '<g fill="#2f4a2a">',
+  '<rect x="7" y="9.3" width="10" height="3" rx="1.5"/>',
+  '<rect x="8.6" y="13.5" width="6.8" height="1.5" rx=".75"/>',
+  '</g>',
+  '<g fill="#8fc57f">',
+  '<circle cx="9.6" cy="10.8" r="1.1"/><circle cx="14.4" cy="10.8" r="1.1"/>',
+  '<circle cx="12" cy="1.4" r="1.4"/>',
+  '</g>',
+  '</svg>',
+].join("")
 
 function pieceGlyph(colour, type) {
   return '<svg viewBox="' + PIECE_VIEWBOX + '" aria-hidden="true">' +

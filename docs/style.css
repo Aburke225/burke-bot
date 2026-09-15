@@ -302,7 +302,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .copy-btn.done svg polyline { animation: none; }
 }
-.copy-btn:hover { color: var(--ink); border-color: var(--border); background: var(--surface-2); }
+/* The confirmation must beat hover, and your cursor is ALWAYS on the button
+   right after clicking it. Both rules are two classes' worth of specificity, so
+   whichever sits later in the file wins - which made this depend on edit order
+   rather than intent. Excluding the states from the hover rule settles it for
+   good: hover simply does not apply while the button is confirming. */
+.copy-btn:not(.done):not(.fail):hover {
+  color: var(--ink); border-color: var(--border); background: var(--surface-2);
+}
 /* a quiet pulse in the footer: if the nightly job stops running, nothing else
    on the page would ever say so */
 /* only ever visible when the nightly job has gone quiet - see app.js */
@@ -394,9 +401,15 @@ footer a { color: var(--ink-2); }
 /* The bot wears a piece; the challenger wears a person. Two different KINDS of
    thing, so they are never mistaken for each other at a glance. */
 .avatar.bot { background: var(--sq-dark); border-color: var(--sq-dark); }
+.avatar.bot svg { width: 92%; height: 92%; }
 .avatar.human { color: var(--ink-2); }
 .avatar.human svg { width: 78%; height: 78%; }
-.pname { font-size: 0.92rem; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.pname {
+  font-size: 0.92rem; font-weight: 600; color: var(--ink); white-space: nowrap;
+  /* the body face is monospace, so a plain space between "Burke" and "Bot" is a
+     full character wide and reads as a gap */
+  word-spacing: -0.22em;
+}
 /* Reserved height even when empty: the first capture must not shove the board
    down the page mid-game. */
 .caps { display: flex; align-items: center; gap: 0.3rem; min-height: 1.2rem; flex-wrap: wrap; }
@@ -404,14 +417,15 @@ footer a { color: var(--ink-2); }
 .cap-group { display: flex; align-items: center; }
 .cap-group svg { width: 1.15rem; height: 1.15rem; display: block; }
 .cap-group svg + svg { margin-left: -0.56rem; }
-.cap-group.cap-b svg {
-  filter: drop-shadow(0.6px 0 0 var(--pc-edge-b)) drop-shadow(-0.6px 0 0 var(--pc-edge-b))
-          drop-shadow(0 0.6px 0 var(--pc-edge-b)) drop-shadow(0 -0.6px 0 var(--pc-edge-b));
-}
-.cap-group.cap-w svg {
-  filter: drop-shadow(0.6px 0 0 var(--pc-edge-w)) drop-shadow(-0.6px 0 0 var(--pc-edge-w))
-          drop-shadow(0 0.6px 0 var(--pc-edge-w)) drop-shadow(0 -0.6px 0 var(--pc-edge-w));
-}
+/* The outline is a DILATE, not four drop-shadows. CSS filters run in sequence,
+   so each drop-shadow offsets the previous result - its own shadow included -
+   and the four compounded into a lopsided smear with the piece off-centre in
+   it. feMorphology grows the alpha equally in every direction instead, so the
+   piece sits concentric in its ring. */
+#pc-edge-b feFlood { flood-color: var(--pc-edge-b); }
+#pc-edge-w feFlood { flood-color: var(--pc-edge-w); }
+.cap-group.cap-b svg { filter: url(#pc-edge-b); }
+.cap-group.cap-w svg { filter: url(#pc-edge-w); }
 .adv {
   font-size: 0.8rem; font-weight: 700; color: var(--ink-2);
   font-variant-numeric: tabular-nums; margin-left: 0.2rem;
