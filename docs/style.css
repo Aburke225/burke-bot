@@ -40,7 +40,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 1060px; margin: 0 auto; padding: 2.2rem 1.2rem 3rem; position: relative; opacity: 1; transition: opacity 0.18s ease; }
+.wrap { max-width: min(1720px, 95vw); margin: 0 auto; padding: 2.2rem 1.2rem 3rem; position: relative; opacity: 1; transition: opacity 0.18s ease; }
 /* boot veil: index.html adds .booting before first paint; app.js removes it
    once fonts + board + stats have settled, so the page fades in as one unit */
 .booting .wrap { opacity: 0; transition: none; }
@@ -92,11 +92,25 @@ body {
 }
 .tagline { color: var(--ink-2); margin: 0; max-width: 46rem; }
 
+/* the board grows with the WINDOW, the way chess.com and lichess both do.
+   Measured on their analysis boards: lichess runs 608px at a 800px-tall
+   viewport, 848 at 1080 and 1152 at 1440 (a steady 76-80% of height);
+   chess.com 664 / 944 / 1304 (83-91%). Both track viewport HEIGHT, not
+   width, because a board taller than the window is useless - and both
+   centre a bounded block rather than stretching to fill an ultrawide.
+   The floor keeps the 560px size the site used to have on a laptop. */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 560px) minmax(280px, 1fr);
+  /* the board column takes its height-derived size but never more than 66% of
+     the row, so on a narrow desktop the panel cannot squeeze it: with two
+     minmax tracks, grid grows both equally and the board (min 0) loses */
+  grid-template-columns: min(var(--board-max), 66%) minmax(16rem, 27rem);
+  justify-content: center;
   gap: 1.6rem;
   align-items: start;
+  /* + the eval gutter, which is part of this column but not part of the
+     board, so the BOARD itself lands at lichess's 76-80% of viewport height */
+  --board-max: clamp(360px, calc(74vh + 4.5rem), 1200px);
 }
 
 .board { width: 100%; aspect-ratio: 1 / 1; } /* reserve the square before the svg exists */
@@ -197,6 +211,12 @@ footer a { color: var(--ink-2); }
    whole board (a flex-stretched wrap could end up 1px shorter than the
    JS-sized board svg); the number reads full-size to its left */
 .board-col { --eval-w: calc(2.1rem + 28px); }
+/* on a big board the gutter grows a touch so the bar keeps its proportion */
+@media (min-height: 1000px) and (min-width: 1200px) {
+  .board-col { --eval-w: calc(2.4rem + 34px); }
+  .eval-bar { width: 18px; }
+  .eval-num { width: 2.4rem; font-size: 0.78rem; }
+}
 .board-wrap { position: relative; padding-left: var(--eval-w); }
 .eval-bar {
   position: absolute; left: calc(2.1rem + 5px); top: 0; bottom: 0; width: 15px;
@@ -281,7 +301,7 @@ footer a { color: var(--ink-2); }
 .cm-chessboard.default .coordinates .coordinate { fill: var(--ink-2); }
 
 @media (max-width: 860px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout { grid-template-columns: 1fr; --board-max: none; }
   .movelist { max-height: 160px; }
 }
 
