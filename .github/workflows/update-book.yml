@@ -2,11 +2,25 @@ name: update book
 
 on:
   schedule:
-    # Off the top of the hour on purpose. A huge share of every cron on GitHub
-    # is set to :00, and scheduled runs queue behind that spike - the four runs
-    # so far landed 3h21m to 5h20m late. An odd minute misses the herd. It does
-    # not make the schedule a guarantee; nothing does.
-    - cron: "17 13 * * *" # daily, 13:17 UTC = 6:17am PDT / 5:17am PST
+    # DEADLINE: finished by 8am Pacific. GitHub dispatches scheduled runs late
+    # and by a varying amount - the four runs so far landed 3h21m to 5h20m
+    # behind their cron time - because an enormous share of every cron on the
+    # platform is set to :00 and scheduled events queue behind that spike.
+    # Scheduled runs are best-effort and can be dropped outright under load, so
+    # one attempt cannot meet a deadline no matter when it is set.
+    #
+    # Three attempts instead, all early enough that even a 7h delay (well past
+    # the worst seen) plus the job's own runtime (6m at its longest) finishes
+    # before 15:00 UTC. That is 8am PDT and 7am PST, so the deadline holds
+    # year-round without the cron having to track daylight saving.
+    #
+    # The extra attempts are close to free: the repo is public, so Actions
+    # minutes are unlimited, and the fingerprint gate above no-ops in about 20
+    # seconds when the game set has not changed. Only the first run of a day
+    # that has new games does any real work; the rest just stamp the heartbeat.
+    - cron: "23 4 * * *"  # 04:23 UTC - 9:23pm PDT the evening before
+    - cron: "23 6 * * *"  # 06:23 UTC - 11:23pm PDT
+    - cron: "23 7 * * *"  # 07:23 UTC - 12:23am PDT, the last that still fits
   workflow_dispatch:
 
 permissions:

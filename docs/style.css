@@ -9,6 +9,7 @@
   --ink: #edf1e4;
   --ink-2: #aab8a5;
   --accent: #8fc57f;
+  --accent-rgb: 143, 197, 127;   /* same colour, for translucent washes */
   --accent-dim: #527a4b;
   --sq-light: #e9ecd6;
   --sq-dark: #527a4b;
@@ -24,6 +25,7 @@
   --ink: #1e2a1d;
   --ink-2: #55684f;
   --accent: #3f5e3a;
+  --accent-rgb: 63, 94, 58;
   --accent-dim: #527a4b;
   color-scheme: light;
 }
@@ -228,7 +230,7 @@ body {
   background: none;
   color: var(--ink-2);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .copy-btn svg { flex: none; width: 0.95rem; height: 0.95rem; }
 /* The tick needs a bigger box than the clipboard at EVERY width. Both sit in a
@@ -238,9 +240,37 @@ body {
    undersized. 1.327x is the factor that brings it to ~73%, matching what the
    desktop block does with its own larger pair. Base rule rather than a mobile
    media query so the 521-860px range is covered too. */
-.copy-btn.done svg { width: 1.26rem; height: 1.26rem; }
+.copy-btn.done svg { width: 1.15rem; height: 1.15rem; }
+/* The confirmation lights the button up from the INSIDE: a wash of the accent
+   clipped to the padding box and a ring drawn just within the border, so the
+   button's outer edge never moves the way a border-colour change makes it
+   appear to. The highlight eats into the usable interior, so the tick steps
+   down 1.38 -> 1.26rem on desktop (and 1.26 -> 1.15 here) to pay for it. */
+.copy-btn.done {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.15);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+/* The tick draws itself on, short tail first, the way it is written by hand -
+   which is why the polyline in app.js is defined bottom-left to top-right.
+   pathLength normalises the geometry to 100 so the dash maths is exact and
+   survives any future change to the points. */
+@keyframes tick-write { from { stroke-dashoffset: 100; } }
+.copy-btn.done svg polyline {
+  stroke-dasharray: 100;
+  /* The RESTING state is fully drawn and the animation runs away from it, so a
+     browser that never runs it still shows a tick. The obvious spelling -
+     from 100 to 0 with fill-mode both - holds the pre-animation value instead,
+     which is an invisible tick: a confirmation that silently shows nothing is
+     worse than one that simply does not animate. */
+  stroke-dashoffset: 0;
+  animation: tick-write 260ms cubic-bezier(.65, 0, .35, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .copy-btn.done svg polyline { animation: none; }
+}
 .copy-btn:hover { color: var(--ink); border-color: var(--border); background: var(--surface-2); }
-.copy-btn.done { color: var(--accent); border-color: var(--accent); }
 /* a quiet pulse in the footer: if the nightly job stops running, nothing else
    on the page would ever say so */
 /* only ever visible when the nightly job has gone quiet - see app.js */
@@ -434,7 +464,7 @@ footer a { color: var(--ink-2); }
 @media (min-width: 861px) {
   .copy-btn { width: 1.86rem; height: 1.86rem; }
   .copy-btn svg { width: 1.04rem; height: 1.04rem; }
-  .copy-btn.done svg { width: 1.38rem; height: 1.38rem; }
+  .copy-btn.done svg { width: 1.26rem; height: 1.26rem; }
 }
 
 /* phones: the eval gutter slims down so the board keeps its width */
