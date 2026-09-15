@@ -43,6 +43,7 @@ Run from the repo root: python3 pipeline/train_v9.py
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import numpy as np
 
@@ -224,6 +225,12 @@ def main():
     json.dump({
         "features": "v9",
         "version": VERSION,
+        # VERSION tracks the feature CONTRACT, so a plain retrain on new games
+        # leaves it at 9.3 and the badge reads the same either way. This stamp
+        # is the only thing that distinguishes today's weights from a week-old
+        # copy - without it there is no way to answer "am I on the new model?"
+        # from the page itself.
+        "trained_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "n_features": N_FEATURES,
         "names": FEATURE_NAMES,
         "active": list(range(N_FEATURES)),

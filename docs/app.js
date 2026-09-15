@@ -1574,7 +1574,7 @@ function renderStats(stats) {
 
 async function boot() {
   const [bookRes, statsRes, styleRes, openingsRes] = await Promise.all([
-    fetch("book.json"), fetch("stats.json"), fetch("style-v9.json?v=1").catch(() => null),
+    fetch("book.json"), fetch("stats.json"), fetch("style-v9.json").catch(() => null),
     fetch("openings.json").catch(() => null),
   ])
   book = await bookRes.json()
@@ -1671,7 +1671,21 @@ async function boot() {
   if (verEl && styleModel && styleModel.version) {
     verEl.textContent = "v" + styleModel.version
     verEl.hidden = false
-    verEl.title = `style model v${styleModel.version} - ${styleModel.n_features} features`
+    // The version is the feature contract, not the weights - a nightly retrain
+    // does not move it. The trained-at stamp is what actually answers "have I
+    // got this morning's model, or a copy my browser kept?"
+    let tip = `style model v${styleModel.version} - ${styleModel.n_features} features`
+    if (styleModel.trained_utc) {
+      const t = Date.parse(styleModel.trained_utc)
+      if (isFinite(t)) {
+        const ageH = (Date.now() - t) / 36e5
+        const when = ageH < 1 ? "under an hour ago"
+          : ageH < 48 ? `${Math.round(ageH)}h ago`
+          : `${Math.round(ageH / 24)} days ago`
+        tip += `\ntrained ${when} (${styleModel.trained_utc})`
+      }
+    }
+    verEl.title = tip
   }
   renderStats(stats)
 
