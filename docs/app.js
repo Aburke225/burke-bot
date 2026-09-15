@@ -41,14 +41,23 @@ const HORIZON_DEPTH = 2
 // chess.com's analysis eval settles around here; the score is converged by
 // this point (depth 18 and 20 agree within a few centipawns in test positions)
 const EVAL_DEPTH = 18
-// sampling temperature: 1 plays the learned distribution exactly; below 1
-// leans toward my most likely choices and trims the blunder tail. Measured on
-// 166 of my own positions: 0.8 -> 36cp average loss with 0.375 probability on
-// the move I really played, 0.65 -> ~31cp with ~0.39. Lower is BOTH more
-// careful and a closer match to my actual choices, so the only cost is
-// variety - at 0 it would play its top pick every time.
+// Sampling temperature. 1 plays the fitted distribution exactly, and measured
+// across all 58 behaviours at once that is not a compromise - it is the answer.
+// Over 9,431 held-out decisions (pipeline/temp_sweep.py):
+//   T     log-lik   feature mismatch   bot loss   (mine: 67cp)
+//   0.65  -1.8657   0.0522             48cp
+//   0.90  -1.7440   0.0149             61cp
+//   1.00  -1.7363   0.0004             66cp
+//   1.25  -1.7602   0.0345             79cp
+// T=1 wins the likelihood, matches my rate on every behaviour to 4 decimals,
+// and lands 1cp from my own error rate. That exactness is not luck: a
+// conditional logit fitted by maximum likelihood matches the empirical feature
+// means exactly at T=1, and any other temperature biases all 58 at once - at
+// 0.65 the bot captured 31.5% of the time against my 27.4% and checked 12.2%
+// against my 10.3%. Note mean-probability-on-my-move is NOT the metric to tune
+// this with: it rises as T falls simply because argmax scores 1 when right.
 // keep in sync with PLAY_TEMP in pipeline/audit.py
-const PLAY_TEMP = 0.65
+const PLAY_TEMP = 1.0
 
 // ---------- engine (single-threaded Stockfish 18 lite WASM) ----------
 // the same build the retrain pipeline analyses games with (run there via
@@ -1594,7 +1603,7 @@ async function boot() {
   }
   const verEl = document.getElementById("model-version")
   if (verEl && styleModel && styleModel.version) {
-    verEl.textContent = styleModel.version
+    verEl.textContent = "v" + styleModel.version
     verEl.hidden = false
     verEl.title = `style model v${styleModel.version} - ${styleModel.n_features} features`
   }

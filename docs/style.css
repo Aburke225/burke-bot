@@ -117,7 +117,8 @@ body {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 0.3em;
   font-weight: 400;
-  vertical-align: 0.9em;
+  /* sits on the wordmark's own baseline, so the bottoms of the two line up */
+  vertical-align: baseline;
   margin-left: 0.35em;
   letter-spacing: 0;
   color: var(--ink-2);

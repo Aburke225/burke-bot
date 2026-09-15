@@ -33,7 +33,7 @@ except ImportError:
     sys.exit("numpy required")
 
 AVG_CAP = 1000  # cap per-move loss when averaging, standard ACPL practice
-PLAY_TEMP = 0.65  # sampling temperature, matching docs/app.js
+PLAY_TEMP = 1.0  # sampling temperature, matching docs/app.js
 
 
 def book_key(board):
