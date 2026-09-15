@@ -287,7 +287,103 @@ function revealCurrentMove() {
   else if (item.bottom > box.bottom) movelistEl.scrollTop += item.bottom - box.bottom + 6
 }
 
+// ---------- the two players, above and below the board ----------
+
+// NOT PIECE_VAL - that name belongs to the v9 feature extractor further down,
+// and redeclaring it killed the whole script before the board ever built.
+const CAP_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 }
+let botRating = null
+
+// The challenger wears a person, drawn in the same 2px round-cap language as
+// the rest of the site's icons. The bot wears a knight on a board square - the
+// site's own mark, and the glyph is pulled from the board's sprite so it is
+// literally the same artwork the pieces are drawn from.
+const HUMAN_AVATAR =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="12" cy="8" r="3.4"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>'
+const PIECE_VIEWBOX = "6 3 28 34"   // crops the sprite tile's padding
+const BOT_AVATAR =
+  '<svg viewBox="' + PIECE_VIEWBOX + '" aria-hidden="true"><use href="#wn"/></svg>'
+
+function pieceGlyph(colour, type) {
+  return '<svg viewBox="' + PIECE_VIEWBOX + '" aria-hidden="true">' +
+         '<use href="#' + colour + type + '"/></svg>'
+}
+
+function renderPlayers() {
+  const top = document.getElementById("pl-top")
+  const bottom = document.getElementById("pl-bot")
+  if (!top || !bottom) return
+  // nothing to name until a colour has been picked
+  const pick = document.getElementById("pick")
+  const started = pick ? pick.hidden : false
+  top.hidden = !started
+  bottom.hidden = !started
+  if (!started) return
+
+  let signedIn = false
+  try { signedIn = !!localStorage.getItem("bb-key") } catch (e) {}
+
+  // the board is oriented to the user's colour, so the bot is always on top
+  const avTop = document.getElementById("av-top")
+  if (avTop.dataset.set !== "bot") { avTop.className = "avatar bot"; avTop.innerHTML = BOT_AVATAR; avTop.dataset.set = "bot" }
+  document.getElementById("nm-top").innerHTML =
+    "Burke Bot" + (botRating ? ' <span class="rat">' + botRating + "</span>" : "")
+
+  const avBot = document.getElementById("av-bot")
+  if (avBot.dataset.set !== "human") { avBot.className = "avatar human"; avBot.innerHTML = HUMAN_AVATAR; avBot.dataset.set = "human" }
+  document.getElementById("nm-bot").textContent = signedIn ? "Burke" : "Challenger"
+}
+
+function renderCaptures() {
+  const capTop = document.getElementById("cap-top")
+  const capBottom = document.getElementById("cap-bot")
+  if (!capTop || !capBottom) return
+
+  // What each side has taken, counted from the move list rather than by
+  // differencing the board: a promotion removes a pawn and adds a queen
+  // without anyone capturing anything, and board-differencing would report a
+  // phantom captured pawn for the rest of the game.
+  const taken = { w: {}, b: {} }
+  for (const m of chess.history({ verbose: true })) {
+    if (!m.captured) continue
+    const victim = m.color === "w" ? "b" : "w"
+    taken[victim][m.captured] = (taken[victim][m.captured] || 0) + 1
+  }
+
+  // The +N comes from the pieces actually on the board, which IS what a player
+  // means by being up material - and unlike the capture list it counts a
+  // promotion, which changes the balance by eight points with no capture.
+  let mat = 0
+  for (const row of chess.board()) {
+    for (const sq of row) {
+      if (!sq || sq.type === "k") continue
+      mat += (sq.color === "w" ? 1 : -1) * CAP_VAL[sq.type]
+    }
+  }
+
+  const userColor = botColor === "w" ? "b" : "w"
+  // a player's row shows what THEY captured, so it carries the enemy's colour
+  paintCaptures(capTop, taken[userColor], userColor, botColor === "w" ? mat : -mat)
+  paintCaptures(capBottom, taken[botColor], botColor, userColor === "w" ? mat : -mat)
+}
+
+function paintCaptures(el, counts, colour, advantage) {
+  let html = ""
+  for (const type of ["p", "n", "b", "r", "q"]) {
+    const n = (counts && counts[type]) || 0
+    if (!n) continue
+    html += '<span class="cap-group">' + pieceGlyph(colour, type).repeat(n) + "</span>"
+  }
+  // only the player who is ahead carries a badge, the way chess.com does it
+  if (advantage > 0) html += '<span class="adv">+' + advantage + "</span>"
+  if (el.innerHTML !== html) el.innerHTML = html
+}
+
 function renderMoves() {
+  renderPlayers()
+  renderCaptures()
   const hist = chess.history()
   movelistEl.innerHTML = ""
   for (let i = 0; i < hist.length; i += 2) {
@@ -1549,6 +1645,7 @@ function newGame(userColor) {
 // ---------- stats panel ----------
 
 function renderStats(stats) {
+  botRating = stats.bot_scale_strength || null
   const list = document.getElementById("stats-list")
   const rows = [
     ["rating", stats.bot_scale_strength ? String(stats.bot_scale_strength) : "—"],
