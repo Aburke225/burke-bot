@@ -302,30 +302,35 @@ const HUMAN_AVATAR =
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<circle cx="12" cy="8" r="3.4"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>'
 const PIECE_VIEWBOX = "6 3 28 34"   // crops the sprite tile's padding
-// Burke Bot's portrait: a machine wearing the board. The head is a rook's
-// battlement, the body the flared collar and plinth every chess piece stands
-// on, and the rest is robot - antenna, lit eyes behind a visor, a speaker
-// grille and a bolt at each temple. Drawn in the board's own two square
-// colours so it reads as a piece sitting on a dark square.
+// Burke Bot's portrait: the Chequerhead's face wearing the Warden's frame.
+// Rook battlements crown a head whose visor is eight squares of board, and it
+// stands on the flared collar and plinth every chess piece stands on. The
+// aerial rises out of the crown's middle notch, where the merlon is missing.
+// Drawn in the board's own two square colours, so it reads as a piece sitting
+// on a dark square.
 const BOT_AVATAR = [
   '<svg viewBox="0 0 24 24" aria-hidden="true">',
+  '<defs><clipPath id="bb-visor">',
+  '<rect x="6.6" y="8.4" width="10.8" height="5.4" rx="1"/>',
+  '</clipPath></defs>',
   '<g fill="#e9ecd6">',
   '<rect x="11.35" y="1.5" width="1.3" height="3.4" rx=".65"/>',
   '<path d="M4.6 7.4V4.1h2.5v1.6h1.6V4.1h2.5v1.6h1.6V4.1h2.5v1.6h1.6V4.1h2.5v3.3z"/>',
-  '<rect x="4.6" y="6.8" width="14.8" height="9.6" rx="2.4"/>',
-  '<rect x="2.3" y="9.6" width="2" height="3.6" rx="1"/>',
-  '<rect x="19.7" y="9.6" width="2" height="3.6" rx="1"/>',
-  '<path d="M8.2 16.4h7.6l1.1 2.3H7.1z"/>',
-  '<path d="M5.9 19.5h12.2a1.1 1.1 0 0 1 1.1 1.1v1.4H4.8v-1.4a1.1 1.1 0 0 1 1.1-1.1z"/>',
+  '<rect x="4.6" y="6.8" width="14.8" height="10.6" rx="2.4"/>',
+  '<rect x="2.3" y="10.2" width="2" height="3.6" rx="1"/>',
+  '<rect x="19.7" y="10.2" width="2" height="3.6" rx="1"/>',
+  '<path d="M8.2 17.4h7.6l1.1 2.3H7.1z"/>',
+  '<path d="M5.9 20.4h12.2a1.1 1.1 0 0 1 1.1 1.1v1.4H4.8v-1.4a1.1 1.1 0 0 1 1.1-1.1z"/>',
   '</g>',
-  '<g fill="#2f4a2a">',
-  '<rect x="7" y="9.3" width="10" height="3" rx="1.5"/>',
-  '<rect x="8.6" y="13.5" width="6.8" height="1.5" rx=".75"/>',
+  '<rect x="6.6" y="8.4" width="10.8" height="5.4" rx="1" fill="#2f4a2a"/>',
+  '<g fill="#8fc57f" clip-path="url(#bb-visor)">',
+  '<rect x="6.6" y="8.4" width="2.7" height="2.7"/>',
+  '<rect x="12" y="8.4" width="2.7" height="2.7"/>',
+  '<rect x="9.3" y="11.1" width="2.7" height="2.7"/>',
+  '<rect x="14.7" y="11.1" width="2.7" height="2.7"/>',
   '</g>',
-  '<g fill="#8fc57f">',
-  '<circle cx="9.6" cy="10.8" r="1.1"/><circle cx="14.4" cy="10.8" r="1.1"/>',
-  '<circle cx="12" cy="1.4" r="1.4"/>',
-  '</g>',
+  '<rect x="8.6" y="14.9" width="6.8" height="1.4" rx=".7" fill="#2f4a2a"/>',
+  '<circle cx="12" cy="1.4" r="1.4" fill="#8fc57f"/>',
   '</svg>',
 ].join("")
 
