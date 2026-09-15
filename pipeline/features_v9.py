@@ -23,7 +23,7 @@ import math
 
 import chess
 
-N_FEATURES = 55
+N_FEATURES = 57
 
 # P N B R Q K - the king is 0 as a VICTIM (it is never captured)...
 PIECE_VAL = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3,
@@ -324,6 +324,30 @@ def features(board, move, ctx, sh, best_sh, rank):
             if (ctx.enemy_king in board.attackers(opp, to_sq)
                     and not board.is_attacked_by(me, to_sq)):
                 x[49] = 1.0
+        # 55/56: castling is not automatically safe. The model fits a big
+        # positive weight to `castle` because he castles a lot, and with no
+        # notion of what he is castling INTO it will happily walk the king next
+        # to an enemy rook. These two ask what the king's new home looks like.
+        if is_castle:
+            kd = board.king(me)
+            if kd is not None:
+                seen = set()
+                for sq in chess.SquareSet(chess.BB_KING_ATTACKS[kd]):
+                    seen |= set(board.attackers(opp, sq))
+                x[55] = min(len(seen), 3) / 3.0
+                kf2, kr2 = chess.square_file(kd), chess.square_rank(kd)
+                shield = 0
+                for f in (kf2 - 1, kf2, kf2 + 1):
+                    if not 0 <= f <= 7:
+                        continue
+                    for r in range(8):
+                        if (r - kr2) * forward_sign <= 0:
+                            continue
+                        pc = board.piece_at(chess.square(f, r))
+                        if pc is not None and pc.color == me and pc.piece_type == chess.PAWN:
+                            shield += 1
+                            break
+                x[56] = (3 - shield) / 3.0
         if ctx.zone:
             seen = set()
             for sq in ctx.zone:
@@ -379,5 +403,7 @@ FEATURE_NAMES = [
     "shield_push_castled", "unsafe_contact_check", "enemy_king_zone_pressure",
     "phase_x_forcing", "imbalance_x_forcing", "phase_x_king_move",
     "imbalance_x_horizon_loss",
+    # appended after v9 shipped its first fit - see the castling note above
+    "castle_into_pressure", "castle_no_shield",
 ]
 assert len(FEATURE_NAMES) == N_FEATURES

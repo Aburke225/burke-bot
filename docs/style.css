@@ -246,10 +246,12 @@ footer a { color: var(--ink-2); }
   color: var(--ink);
   border-radius: 10px;
   padding: 0 0.7rem;
-  /* border-box means the padding eats into the ch width - 17 characters of
-     placeholder plus 1.4rem of padding needs the extra room */
-  width: 22ch;
+  /* snug around the longest placeholder ("you are not Burke", 17 chars) plus
+     the padding and the caret indent below - any wider leaves dead space */
+  width: 21ch;
 }
+
+.bb-me-input::placeholder { text-indent: 0.4em; }
 
 /* overlays: pick a color to start; the end screen when it's over */
 /* the eval bar sits inside board-wrap so the overlays always cover the
