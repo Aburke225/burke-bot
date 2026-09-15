@@ -148,6 +148,52 @@ function setStatus(kind, label, line) {
   if (kind !== "thinking") statusByPly[chess.history().length] = { kind, label, line }
 }
 
+// Resign sits under the stats card on a desktop layout, and under the board on
+// a stacked one - which is where it has always been on a phone, and the stacked
+// layout is deliberately left exactly as it was
+const stacked = window.matchMedia("(max-width: 860px)")
+
+function placeControls() {
+  const controls = document.querySelector(".controls")
+  if (!controls) return
+  const host = document.querySelector(stacked.matches ? ".board-col" : ".panel")
+  if (host && controls.parentElement !== host) host.appendChild(controls)
+}
+
+// The move list grows with the game, but never so far that Resign below it
+// drops past the bottom of the board - which on a laptop would put the button
+// under the fold. Past that point the list caps and scrolls instead, so rows
+// keep their size and every move stays reachable.
+const MOVELIST_MIN = 72
+function fitMoveList() {
+  const boardWrap = document.querySelector(".board-wrap")
+  const controls = document.querySelector(".controls")
+  const panel = document.querySelector(".panel")
+  if (!boardWrap || !controls || !panel) return
+  if (stacked.matches || controls.parentElement !== panel) {
+    movelistEl.style.removeProperty("--movelist-max")  // stacked: CSS cap applies
+    return
+  }
+  // measure the list unconstrained, then give back exactly the slack (or take
+  // back exactly the overflow) between Resign's bottom and the board's bottom
+  movelistEl.style.setProperty("--movelist-max", "100vh")
+  const natural = movelistEl.getBoundingClientRect().height
+  const spare = boardWrap.getBoundingClientRect().bottom - controls.getBoundingClientRect().bottom
+  movelistEl.style.setProperty("--movelist-max",
+    Math.max(MOVELIST_MIN, Math.floor(natural + spare)) + "px")
+}
+
+// scroll the highlighted move into view INSIDE the list - scrollIntoView would
+// also scroll the page, which yanks the board around while browsing history
+function revealCurrentMove() {
+  const cur = movelistEl.querySelector(".cur")
+  if (!cur) return
+  const box = movelistEl.getBoundingClientRect()
+  const item = cur.getBoundingClientRect()
+  if (item.top < box.top) movelistEl.scrollTop -= box.top - item.top + 6
+  else if (item.bottom > box.bottom) movelistEl.scrollTop += item.bottom - box.bottom + 6
+}
+
 function renderMoves() {
   const hist = chess.history()
   movelistEl.innerHTML = ""
@@ -167,10 +213,11 @@ function renderMoves() {
     }
     movelistEl.appendChild(li)
   }
-  movelistEl.scrollTop = movelistEl.scrollHeight
   // the freshest move wears the highlight (the chat no longer names moves)
   const last = movelistEl.querySelector('[data-ply="' + (hist.length - 1) + '"]')
   if (last) last.classList.add("cur")
+  fitMoveList()
+  revealCurrentMove()
   // any real move snaps history browsing back to the live position
   viewPly = -1
   endHiddenForBrowse = false
@@ -240,7 +287,22 @@ const sfx = (() => {
     } catch (e) {}
   }
   return {
-    unlock() { try { ac().resume() } catch (e) {} },
+    // iOS is fussy: the context starts suspended, resume() only counts inside a
+    // real user gesture, and Safari wants an actual buffer to have been played
+    // in that gesture before it lets anything else through. It also suspends
+    // the context whenever the page goes to the background.
+    // NOTE none of this defeats the iPhone's physical ring/silent switch -
+    // WebAudio is in the "ambient" category, which that switch mutes outright.
+    unlock() {
+      try {
+        const c = ac()
+        if (c.state === "suspended") c.resume()
+        const s = c.createBufferSource()
+        s.buffer = c.createBuffer(1, 1, c.sampleRate)
+        s.connect(c.destination)
+        s.start(0)
+      } catch (e) {}
+    },
     // frequencies/weights tuned so each synth's spectrum lands on the
     // measured band profile of the matching chess.com sample
     // his picks from the tasting panel: A move, B capture, A castle, D check
@@ -349,7 +411,7 @@ function browseTo(k) {
   const mark = live ? n - 1 : k - 1
   if (mark >= 0) {
     const span = movelistEl.querySelector('[data-ply="' + mark + '"]')
-    if (span) { span.classList.add("cur"); span.scrollIntoView({ block: "nearest" }) }
+    if (span) { span.classList.add("cur"); revealCurrentMove() }
   }
   // ...and highlight its from/to squares on the board
   try {
@@ -827,11 +889,10 @@ function showEnd(result, line) {
 }
 
 function setControls(on) {
-  document.getElementById("draw-btn").disabled = !on
   document.getElementById("resign-btn").disabled = !on
 }
 
-// ---------- pick a color / play again / resign / offer a draw ----------
+// ---------- pick a color / play again / resign ----------
 
 function startGame(userColor) {
   document.getElementById("pick").hidden = true
@@ -866,31 +927,6 @@ function playAgain() {
 function resignClick() {
   if (!gameActive) return
   document.getElementById("confirm").hidden = false
-}
-
-async function drawClick() {
-  if (!gameActive) return
-  const human = botColor === "w" ? "b" : "w"
-  if (chess.turn() !== human) return
-  const btn = document.getElementById("draw-btn")
-  btn.disabled = true
-  setStatus("thinking", "draw offer", "Hmm, let me look at the position…")
-  await engine.ready
-  const myGame = gameId
-  const result = await engine.bestMove(chess.fen())
-  if (myGame !== gameId || !gameActive) return
-  const line1 = result.lines[1]
-  const botCp = line1 ? -line1.cp : 0
-  const early = chess.moveNumber() <= 15
-  // early on, only a clearly losing bot takes the escape hatch; later,
-  // any roughly equal (or worse) position is a fair handshake
-  if (early ? botCp <= -150 : botCp <= 60) {
-    finish("d", "I'll take the draw.")
-  } else {
-    btn.disabled = false
-    setStatus("engine", "draw declined",
-      early ? "A draw already? No — let's play on." : "No — I like my position. Your move.")
-  }
 }
 
 function inputHandler(event) {
@@ -1049,7 +1085,6 @@ async function boot() {
   document.getElementById("pick-white").addEventListener("click", () => startGame("w"))
   document.getElementById("pick-black").addEventListener("click", () => startGame("b"))
   document.getElementById("again").addEventListener("click", playAgain)
-  document.getElementById("draw-btn").addEventListener("click", drawClick)
   document.getElementById("resign-btn").addEventListener("click", resignClick)
   document.getElementById("resign-no").addEventListener("click", () => {
     document.getElementById("confirm").hidden = true
@@ -1060,6 +1095,24 @@ async function boot() {
   })
   setStatus("book", "new game", "Pick your color to start.")
   document.addEventListener("keydown", browseKey)
+  placeControls()
+  fitMoveList()
+  // unlock audio on the FIRST touch anywhere, not just on Play - otherwise a
+  // phone that taps the board or the theme toggle first stays silent all game
+  const unlockOnce = () => {
+    sfx.unlock()
+    document.removeEventListener("pointerdown", unlockOnce)
+    document.removeEventListener("touchend", unlockOnce)
+  }
+  document.addEventListener("pointerdown", unlockOnce)
+  document.addEventListener("touchend", unlockOnce)
+  // coming back from the background leaves the context suspended on iOS
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) sfx.unlock() })
+  let relayout
+  window.addEventListener("resize", () => {
+    clearTimeout(relayout)
+    relayout = setTimeout(() => { placeControls(); fitMoveList(); revealCurrentMove() }, 120)
+  })
 
   // lift the boot veil (index.html adds .booting before first paint): the
   // board and stats are built by now - wait for the initial position to

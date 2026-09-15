@@ -40,15 +40,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: min(1720px, 95vw); margin: 0 auto; padding: 2.2rem 1.2rem 3rem; position: relative; opacity: 1; transition: opacity 0.18s ease; }
+.wrap {
+  max-width: min(1720px, 95vw); margin: 0 auto; padding: 2.2rem 1.2rem 3rem;
+  position: relative; opacity: 1; transition: opacity 0.18s ease;
+  /* + the eval gutter, which is part of the board column but not part of the
+     board, so the BOARD itself lands at lichess's 76-80% of viewport height */
+  --board-max: clamp(360px, calc(74vh + 4.5rem), 1200px);
+  --eval-w: calc(2.1rem + 28px);
+}
 /* boot veil: index.html adds .booting before first paint; app.js removes it
    once fonts + board + stats have settled, so the page fades in as one unit */
 .booting .wrap { opacity: 0; transition: none; }
 
 .header-actions {
-  position: absolute;
-  top: 2rem;
-  right: 1.2rem;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -82,7 +90,7 @@ body {
 .theme-toggle svg { width: 18px; height: 18px; }
 .theme-toggle:hover { border-color: var(--accent); }
 
-.top { margin-bottom: 1.8rem; }
+.top { margin-bottom: 1.8rem; row-gap: 0.4rem; }
 .wordmark {
   font-family: "Alfa Slab One", Georgia, serif;
   font-weight: 400;
@@ -99,23 +107,30 @@ body {
    width, because a board taller than the window is useless - and both
    centre a bounded block rather than stretching to fill an ultrawide.
    The floor keeps the 560px size the site used to have on a laptop. */
-.layout {
+/* the header, the board row and the footer all share ONE column template, so
+   the wordmark, the tagline and the footer line up with the board's left edge
+   rather than with the page - which on a wide window are far apart, because
+   the grid is centred inside a much wider .wrap */
+.top, .layout, footer {
   display: grid;
   /* the board column takes its height-derived size but never more than 66% of
      the row, so on a narrow desktop the panel cannot squeeze it: with two
      minmax tracks, grid grows both equally and the board (min 0) loses */
   grid-template-columns: min(var(--board-max), 66%) minmax(16rem, 27rem);
   justify-content: center;
-  gap: 1.6rem;
-  align-items: start;
-  /* + the eval gutter, which is part of this column but not part of the
-     board, so the BOARD itself lands at lichess's 76-80% of viewport height */
-  --board-max: clamp(360px, calc(74vh + 4.5rem), 1200px);
+  column-gap: 1.6rem;
 }
+.layout { row-gap: 1.6rem; align-items: start; }
+
+/* everything that must line up with the board's left edge carries the eval
+   gutter as padding, because the gutter lives inside the board column but is
+   not part of the board itself */
+.wordmark, .tagline, .foot-inner { grid-column: 1; padding-left: var(--eval-w); }
 
 .board { width: 100%; aspect-ratio: 1 / 1; } /* reserve the square before the svg exists */
 
-.controls { display: flex; gap: 0.7rem; margin-top: 0.9rem; margin-left: var(--eval-w); }
+.controls { display: flex; gap: 0.7rem; }
+.controls .btn { width: 100%; }
 .btn {
   font: inherit;
   font-size: 0.9rem;
@@ -131,6 +146,12 @@ body {
 .btn.active { border-color: var(--accent); color: var(--accent); }
 
 .panel { display: flex; flex-direction: column; gap: 1rem; }
+/* desktop reading order down the right-hand column (mobile keeps the original
+   order below - the stacked layout is deliberately left alone) */
+.stats-card  { order: 1; }
+.status-card { order: 2; }
+.moves-card  { order: 3; }
+.controls    { order: 4; }
 
 .status-card, .moves-card, .stats-card {
   background: var(--surface);
@@ -171,11 +192,12 @@ body {
 
 .movelist {
   margin: 0; padding: 0 0 0 1.6rem;
-  columns: 2; column-gap: 1.4rem;
   font-size: 0.88rem;
-  max-height: 240px;
   overflow-y: auto;
   color: var(--ink-2);
+  /* app.js measures the real space and writes this; the fallback matters only
+     for the moment before the first measurement, and on single-column layouts */
+  max-height: var(--movelist-max, 240px);
 }
 .movelist li { padding: 0.06rem 0; break-inside: avoid; }
 .movelist .w, .movelist .b { color: var(--ink); display: inline-block; min-width: 3.2em; }
@@ -210,10 +232,9 @@ footer a { color: var(--ink-2); }
 /* the eval bar sits inside board-wrap so the overlays always cover the
    whole board (a flex-stretched wrap could end up 1px shorter than the
    JS-sized board svg); the number reads full-size to its left */
-.board-col { --eval-w: calc(2.1rem + 28px); }
 /* on a big board the gutter grows a touch so the bar keeps its proportion */
 @media (min-height: 1000px) and (min-width: 1200px) {
-  .board-col { --eval-w: calc(2.4rem + 34px); }
+  .wrap { --eval-w: calc(2.4rem + 34px); }
   .eval-bar { width: 18px; }
   .eval-num { width: 2.4rem; font-size: 0.78rem; }
 }
@@ -301,13 +322,28 @@ footer a { color: var(--ink-2); }
 .cm-chessboard.default .coordinates .coordinate { fill: var(--ink-2); }
 
 @media (max-width: 860px) {
-  .layout { grid-template-columns: 1fr; --board-max: none; }
+  /* stacked layout: the board sits above the panel, so none of the desktop
+     alignment work applies - the header, footer and panel go back to exactly
+     what they were, and app.js puts Resign back under the board */
+  .top, footer { display: block; }
+  .layout { grid-template-columns: 1fr; }
+  .wrap { --board-max: none; }
+  .wordmark, .tagline, .foot-inner { padding-left: 0; }
+  .header-actions {
+    position: absolute; top: 2rem; right: 1.2rem;
+    grid-column: auto; grid-row: auto; justify-self: auto; align-self: auto;
+  }
+  .status-card { order: 1; }
+  .moves-card  { order: 2; }
+  .stats-card  { order: 3; }
   .movelist { max-height: 160px; }
+  .controls { margin-top: 0.9rem; margin-left: var(--eval-w); }
+  .controls .btn { width: auto; }
 }
 
 /* phones: the eval gutter slims down so the board keeps its width */
 @media (max-width: 520px) {
-  .board-col { --eval-w: calc(1.45rem + 21px); }
+  .wrap { --eval-w: calc(1.45rem + 21px); }
   .eval-bar { left: calc(1.45rem + 4px); width: 11px; }
   .eval-num { width: 1.45rem; font-size: 0.6rem; }
 }
