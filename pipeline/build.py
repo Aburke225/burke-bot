@@ -2,9 +2,10 @@
 """Build the Burke Bot opening book from chess.com games.
 
 Fetches every monthly archive for the account, keeps rapid games against
-humans, merges any manually exported PGNs from manual-pgn/ (chess.com's
-public API never includes vs-computer games, so bot games arrive that way),
-and writes docs/book.json + docs/stats.json for the site to consume.
+humans plus daily games against the opponents in DAILY_OPPONENTS, merges any
+manually exported PGNs from manual-pgn/ (chess.com's public API never includes
+vs-computer games, so bot games arrive that way), and writes docs/book.json +
+docs/stats.json for the site to consume.
 
 Run from the repo root: python3 pipeline/build.py
 """
@@ -28,6 +29,13 @@ MAX_BOOK_PLY = 30  # keep the book to the first 15 full moves
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB_DIR = os.path.join(REPO_ROOT, "docs")
 MANUAL_DIR = os.path.join(REPO_ROOT, "manual-pgn")
+# Rapid is the baseline: it is the speed I actually play, so it is the version
+# of me the bot should imitate. Daily games are correspondence - hours or days
+# per move - so they show a more careful player than the one being cloned, and
+# are skipped by default. The exception is these opponents, whose daily games
+# are close contests worth learning from (lowercase chess.com usernames).
+# Blitz and bullet are never included.
+DAILY_OPPONENTS = {"trev4ev", "crayzin", "plashible"}
 
 
 def fetch_json(url):
@@ -44,7 +52,14 @@ def api_games():
         for g in month.get("games", []):
             if g.get("rules") != "chess":
                 continue
-            if g.get("time_class") != "rapid":
+            tc = g.get("time_class")
+            if tc == "daily":
+                white = g.get("white", {}).get("username", "").lower()
+                black = g.get("black", {}).get("username", "").lower()
+                opponent = black if white == USERNAME else white
+                if opponent not in DAILY_OPPONENTS:
+                    continue
+            elif tc != "rapid":
                 continue
             if "pgn" not in g:
                 continue
@@ -109,7 +124,7 @@ def book_key(board):
 def main():
     sources = [(pgn, src) for pgn, src in api_games()]
     manual = list(manual_games())
-    print(f"api rapid games: {len(sources)}, manual games: {len(manual)}")
+    print(f"api games (rapid + allowed daily): {len(sources)}, manual games: {len(manual)}")
 
     # named openings (lichess chess-openings data, CC0), keyed like the book -
     # the site detects the opening live and quotes my record with it, so the

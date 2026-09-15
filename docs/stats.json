@@ -1,12 +1,12 @@
 {
-  "as_black": 180,
-  "as_white": 165,
-  "book_positions": 4145,
+  "as_black": 186,
+  "as_white": 171,
+  "book_positions": 4264,
   "bot_scale_strength": 1335,
   "draws": 13,
-  "games": 345,
-  "last_game": "2025-12-20",
-  "losses": 171,
+  "games": 357,
+  "last_game": "2026-01-10",
+  "losses": 174,
   "manual_games": 30,
   "opening_stats": {
     "Alekhine Defense": {
@@ -17,8 +17,8 @@
     },
     "Bird Opening": {
       "d": 0,
-      "l": 0,
-      "n": 1,
+      "l": 1,
+      "n": 2,
       "w": 1
     },
     "Bishop's Opening": {
@@ -78,8 +78,8 @@
     "Four Knights Game": {
       "d": 0,
       "l": 3,
-      "n": 6,
-      "w": 3
+      "n": 7,
+      "w": 4
     },
     "French Defense": {
       "d": 0,
@@ -125,15 +125,15 @@
     },
     "King's Knight Opening": {
       "d": 3,
-      "l": 44,
-      "n": 96,
-      "w": 49
+      "l": 45,
+      "n": 100,
+      "w": 52
     },
     "King's Pawn Game": {
       "d": 12,
-      "l": 123,
-      "n": 264,
-      "w": 129
+      "l": 125,
+      "n": 274,
+      "w": 137
     },
     "Modern Defense": {
       "d": 0,
@@ -180,8 +180,8 @@
     "Queen's Gambit": {
       "d": 0,
       "l": 15,
-      "n": 19,
-      "w": 4
+      "n": 20,
+      "w": 5
     },
     "Queen's Gambit Accepted": {
       "d": 0,
@@ -192,14 +192,14 @@
     "Queen's Gambit Declined": {
       "d": 0,
       "l": 12,
-      "n": 14,
-      "w": 2
+      "n": 15,
+      "w": 3
     },
     "Queen's Pawn Game": {
       "d": 1,
       "l": 33,
-      "n": 61,
-      "w": 27
+      "n": 62,
+      "w": 28
     },
     "Rapport-Jobava System, with e6": {
       "d": 0,
@@ -239,15 +239,15 @@
     },
     "Scotch Game": {
       "d": 2,
-      "l": 19,
-      "n": 41,
-      "w": 20
+      "l": 20,
+      "n": 44,
+      "w": 22
     },
     "Sicilian Defense": {
       "d": 4,
-      "l": 29,
-      "n": 62,
-      "w": 29
+      "l": 30,
+      "n": 68,
+      "w": 34
     },
     "Slav Defense": {
       "d": 0,
@@ -264,8 +264,8 @@
     "Three Knights Opening": {
       "d": 0,
       "l": 3,
-      "n": 7,
-      "w": 4
+      "n": 8,
+      "w": 5
     },
     "Van Geet Opening": {
       "d": 0,
@@ -295,7 +295,7 @@
   "openings_black": [
     [
       "Sicilian Defense",
-      51
+      56
     ],
     [
       "Owen Defense",
@@ -321,7 +321,7 @@
   "openings_white": [
     [
       "Scotch Game",
-      37
+      40
     ],
     [
       "Philidor Defense",
@@ -346,5 +346,5 @@
   ],
   "site_games": 0,
   "username": "Burkeley",
-  "wins": 161
+  "wins": 170
 }

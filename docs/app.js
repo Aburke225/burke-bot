@@ -29,9 +29,13 @@ const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/ches
 // (training must analyse at the depth the site plays at; retrain after changing)
 const DEPTH = 5
 // sampling temperature: 1 plays the learned distribution exactly; below 1
-// leans toward my most likely choices and trims the blunder tail.
+// leans toward my most likely choices and trims the blunder tail. Measured on
+// 166 of my own positions: 0.8 -> 36cp average loss with 0.375 probability on
+// the move I really played, 0.65 -> ~31cp with ~0.39. Lower is BOTH more
+// careful and a closer match to my actual choices, so the only cost is
+// variety - at 0 it would play its top pick every time.
 // keep in sync with PLAY_TEMP in pipeline/audit.py
-const PLAY_TEMP = 0.8
+const PLAY_TEMP = 0.65
 
 // ---------- engine (single-threaded Stockfish 18 lite WASM) ----------
 // the same build the retrain pipeline analyses games with (run there via
