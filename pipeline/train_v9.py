@@ -16,10 +16,25 @@ Two deliberate departures from v8, both measured rather than assumed:
    than a converged fit's. No scipy here, so this is a compact two-loop
    recursion with Armijo backtracking.
 
-The acceptance metric is NOT accuracy. It is the mean probability the policy
-assigns to the move Andrew ACTUALLY played, measured out-of-fold with folds
-split by GAME - positions from one game are not independent. Several features
-in this contract knowingly cost top-1 while earning likelihood, which is what
+THE ACCEPTANCE GATE, and why it is what it is:
+
+  PRIMARY - out-of-fold LOG-LIKELIHOOD of the moves he actually played, folds
+  split by GAME (positions from one game are not independent). The log score
+  is a PROPER scoring rule: its expectation is maximised by reporting true
+  probabilities, so it cannot be gamed by confidence.
+
+  SECONDARY - FEATURE-MOMENT MISMATCH. For each feature, the average over the
+  moves he played versus the average the model's distribution puts on it. This
+  asks "does it do the things I do, as often as I do them" - and it catches
+  changes that are behaviourally right but statistically tiny. The castle-safety
+  pair is the worked example: worth only +0.0002 log-likelihood, which reads as
+  noise, while halving a move he had explicitly flagged.
+
+NOT the gate: mean probability on his played move. That is the LINEAR score,
+and it is IMPROPER - it rises monotonically as a distribution sharpens, so
+tuning anything on it drives you toward a deterministic bot. It is printed
+below as a human-legible number only. Top-1 accuracy is likewise not the gate;
+several features knowingly cost top-1 while earning likelihood, which is what
 a suppression term is supposed to do.
 
 Run from the repo root: python3 pipeline/train_v9.py
@@ -159,7 +174,8 @@ def main():
         results[lam] = (np.mean(ps), np.mean(accs), np.mean(lls))
         print(f"{lam:>9.0e}{np.mean(ps):>18.4f} {np.mean(accs):>8.2%}{np.mean(lls):>10.4f}")
 
-    best_lam = max(results, key=lambda k_: results[k_][0])
+    # selected on LOG-LIKELIHOOD (proper), not mean probability (improper)
+    best_lam = max(results, key=lambda k_: results[k_][2])
     bp, ba, bll = results[best_lam]
     print(f"\nbest L2 = {best_lam:.0e}  (mean p {bp:.4f}, top-1 {ba:.2%}, log-lik {bll:.4f})")
 
@@ -185,6 +201,21 @@ def main():
     print(f"in-sample mean p {p_in:.4f} vs out-of-fold {bp:.4f} "
           f"(gap {p_in - bp:+.4f} - small gap means nothing to select against)")
 
+    # the behavioural gate: does it do what he does, as often as he does it?
+    idx = np.arange(N)
+    zz = np.where(M, Xs @ w_s, NEG)
+    ee = np.exp(zz - zz.max(axis=1, keepdims=True))
+    ee = np.where(M, ee, 0.0)
+    pp = ee / ee.sum(axis=1, keepdims=True)
+    his_m = X[idx, y].mean(axis=0)
+    bot_m = np.einsum("nk,nkd->d", pp, X) / N
+    mismatch = np.abs(bot_m - his_m) / scale
+    print(f"\nbehaviour match: mean |bot - him| = {mismatch.mean():.5f} "
+          f"feature std (0 = he and it do everything at the same rate)")
+    worst = np.argsort(-mismatch)[:5]
+    print("  furthest apart: " + ", ".join(
+        f"{FEATURE_NAMES[k]} {his_m[k]:.3f} vs {bot_m[k]:.3f}" for k in worst))
+
     order = np.argsort(-np.abs(w))
     print("\nweights, largest first:")
     for i in order:
@@ -200,8 +231,10 @@ def main():
         "l2": best_lam,
         "examples": int(N),
         "pool": int(K),
+        "out_of_fold_log_lik": float(bll),
         "out_of_fold_mean_p": float(bp),
         "out_of_fold_top1": float(ba),
+        "behaviour_mismatch": float(mismatch.mean()),
     }, open(STYLE, "w"), indent=1)
     print(f"\nwrote {STYLE}")
 
