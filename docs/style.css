@@ -612,9 +612,33 @@ footer a { color: var(--ink-2); }
   .cap-group svg + svg { margin-left: -0.5rem; }
   .adv { font-size: 0.74rem; }
   /* three header buttons no longer fit beside the wordmark at this width, so
-     they keep their corner and the title drops below them */
-  .header-actions { top: 1.3rem; }
+     they keep their corner and the title drops below them. "I'm Burke" moves
+     to the opposite corner: the row spans the full content width and the first
+     item takes an auto right margin, which pushes the two toggles to the right
+     in the order they already have. */
+  .header-actions { top: 1.3rem; left: 1.2rem; }
+  .header-actions .login-btn { margin-right: auto; }
   .top { padding-top: 2.6rem; }
   .eval-bar { left: calc(1.45rem + 4px); width: 11px; }
   .eval-num { left: 0; width: 1.45rem; font-size: 0.6rem; }
+
+  /* CENTRE THE BOARD, not the board-plus-gutter. The gutter only exists on the
+     left, so a board that fills the column sits half a gutter right of centre.
+     Pulling the wrapper left by half the gutter and giving the same amount back
+     on the right keeps the board's WIDTH and moves its centre onto the page's -
+     the eval bar then hangs into the page margin, which has room for it (at
+     375px it starts at 6.5px, at 320px at 5.1px, so it never leaves the
+     screen). Everything that lined up with the board's left edge follows it by
+     the same half gutter. */
+  .board-wrap {
+    margin-left: calc(var(--eval-w) / -2);
+    margin-right: calc(var(--eval-w) / 2);
+  }
+  .wordmark, .tagline, .foot-inner, .player { padding-left: calc(var(--eval-w) / 2); }
+  /* Resign still ends exactly at the board's right edge, so its row has to
+     shrink to the board on BOTH sides now that the board has moved. */
+  .controls {
+    margin-left: calc(var(--eval-w) / 2);
+    margin-right: calc(var(--eval-w) / 2);
+  }
 }
