@@ -23,7 +23,7 @@ import math
 
 import chess
 
-N_FEATURES = 57
+N_FEATURES = 58
 
 # P N B R Q K - the king is 0 as a VICTIM (it is never captured)...
 PIECE_VAL = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3,
@@ -63,6 +63,50 @@ def en_prise(board, sq, owner):
         return False
     cheapest = min(ATTACKER_VAL[board.piece_at(a).piece_type] for a in attackers)
     return cheapest < PIECE_VAL[piece.piece_type]
+
+
+def aimless_edge_pawn(board, move, me):
+    """A quiet edge-pawn push with no job, judged on the PRE-move board.
+
+    Measured over his games: he kicks a bishop that is already on the square
+    17.1% of the time, but pushes prophylactically into an empty square 1.8%,
+    against 0.7% for pushes with no purpose at all - and he airs out his own
+    castled king 0.4%, BELOW that baseline. v8 carried this as a hard play-time
+    guard; v9 carries it as a feature so the model fits his own rate instead of
+    a hand-set rule. Purposeful means: kicks an enemy piece off the square it
+    now attacks, defends an attacked friend, is a passer, or storms their king.
+    """
+    if not (board.pieces(chess.QUEEN, chess.WHITE) and board.pieces(chess.QUEEN, chess.BLACK)):
+        return False                      # endgames: edge pushes are normal
+    ff = chess.square_file(move.from_square)
+    tr = chess.square_rank(move.to_square)
+    ahead = range(tr + 1, 8) if me == chess.WHITE else range(0, tr)
+    for f in {max(0, ff - 1), ff, min(7, ff + 1)}:
+        for r in ahead:
+            pc = board.piece_at(chess.square(f, r))
+            if pc is not None and pc.piece_type == chess.PAWN and pc.color != me:
+                break
+        else:
+            continue
+        break
+    else:
+        return False                      # nothing ahead: a passer on the march
+    board.push(move)
+    try:
+        for sq in chess.scan_forward(chess.BB_PAWN_ATTACKS[me][move.to_square]):
+            pc = board.piece_at(sq)
+            if pc is not None and pc.color != me:
+                return False              # kicks an enemy piece
+            if pc is not None and pc.color == me and board.attackers(not me, sq):
+                return False              # defends an attacked friend
+        my_k, opp_k = board.king(me), board.king(not me)
+        if (opp_k is not None and my_k is not None
+                and abs(chess.square_file(opp_k) - ff) <= 2
+                and abs(chess.square_file(my_k) - ff) >= 3):
+            return False                  # pawn storm at their king
+        return True
+    finally:
+        board.pop()
 
 
 def chebyshev(a, b):
@@ -384,6 +428,8 @@ def features(board, move, ctx, sh, best_sh, rank):
     x[52] = ctx.imbalance * forcing
     x[53] = ctx.phase * (1.0 if king_move else 0.0)
     x[54] = ctx.imbalance * x[0]
+    if x[27] and move.promotion is None and aimless_edge_pawn(board, move, me):
+        x[57] = 1.0
     return x
 
 
@@ -405,5 +451,7 @@ FEATURE_NAMES = [
     "imbalance_x_horizon_loss",
     # appended after v9 shipped its first fit - see the castling note above
     "castle_into_pressure", "castle_no_shield",
+    # v8 carried this as a hard guard; as a feature the model sets its own rate
+    "aimless_edge_pawn",
 ]
 assert len(FEATURE_NAMES) == N_FEATURES

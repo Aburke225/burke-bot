@@ -40,7 +40,7 @@ function extract(name, kind = "function") {
 const consts = ["V9_N", "V9_PIECE_VAL", "V9_ATTACKER_VAL", "V9_ORDER", "V9_HOME",
                 "V9_FIANCHETTO", "sqFile", "sqRank", "mkSq", "cheb"]
 const fns = ["tryMove", "enPriseV9", "neighbours", "decisionContextV9",
-             "horizonScores", "moveFeaturesV9"]
+             "horizonScores", "aimlessEdgePawnV9", "moveFeaturesV9"]
 const src = [...consts.map(c => extract(c, "const")), ...fns.map(f => extract(f)),
              "return { decisionContextV9, moveFeaturesV9, horizonScores, V9_N }"].join("\n")
 

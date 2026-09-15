@@ -776,7 +776,7 @@ function moveFeatures(uci, cpGapPawns, rank, ctx) {
 // search reveals - which is exactly why the bot can now make the quiet mistake
 // that only costs material several moves later.
 
-const V9_N = 57
+const V9_N = 58
 const V9_PIECE_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
 // a king ATTACKER is worth 100, not 0. v8 used 0 and therefore called every
 // defended piece beside the enemy king "hanging".
@@ -925,6 +925,45 @@ function horizonScores(ucis, shByUci) {
   return { sh: out, bestSh: usable.length ? Math.max(...usable) : null }
 }
 
+// a quiet edge-pawn push with no job, judged on the PRE-move board. v8 carried
+// this as a hard play-time guard; v9 carries it as a feature so the model fits
+// his own measured rate (he kicks a bishop already on the square 17.1% of the
+// time and pushes with no purpose at all 0.7%) instead of a hand-set rule.
+function aimlessEdgePawnV9(me, opp, from, to) {
+  // called with the move ALREADY on the board; `from`/`to` are its squares
+  let whiteQ = false, blackQ = false
+  const cells = []
+  for (const row of chess.board()) for (const c of row) if (c) {
+    cells.push(c)
+    if (c.type === "q") { if (c.color === "w") whiteQ = true; else blackQ = true }
+  }
+  if (!whiteQ || !blackQ) return false        // endgames: edge pushes are normal
+  const ff = sqFile(from), tr = sqRank(to), fwd = me === "w" ? 1 : -1
+  let blocked = false
+  for (const f of [Math.max(0, ff - 1), ff, Math.min(7, ff + 1)]) {
+    for (const c of cells) {
+      if (c.type === "p" && c.color === opp && sqFile(c.square) === f &&
+          (sqRank(c.square) - tr) * fwd > 0) { blocked = true; break }
+    }
+    if (blocked) break
+  }
+  if (!blocked) return false                  // a passer on the march
+  const ar = tr + fwd
+  for (const f of [sqFile(to) - 1, sqFile(to) + 1]) {
+    if (f < 0 || f > 7 || ar < 0 || ar > 7) continue
+    const sq = mkSq(f, ar)
+    const p = chess.get(sq)
+    if (p && p.color === opp) return false    // kicks an enemy piece
+    if (p && p.color === me && chess.attackers(sq, opp).length) return false
+  }
+  let myK = null, oppK = null
+  for (const c of cells) if (c.type === "k") { if (c.color === me) myK = c.square; else oppK = c.square }
+  if (oppK && myK && Math.abs(sqFile(oppK) - ff) <= 2 && Math.abs(sqFile(myK) - ff) >= 3) {
+    return false                              // pawn storm at their king
+  }
+  return true
+}
+
 function moveFeaturesV9(uci, ctx, sh, bestSh, rank) {
   const from = uci.slice(0, 2), to = uci.slice(2, 4)
   const me = ctx.me, opp = ctx.opp
@@ -981,6 +1020,10 @@ function moveFeaturesV9(uci, ctx, sh, bestSh, rank) {
     const seen = new Set()
     for (const sq of ctx.zone) for (const a of chess.attackers(sq, me)) seen.add(a)
     if (seen.size > ctx.zoneBefore) zonePressure = 1
+  }
+  let aimlessEdge = 0
+  if (mover === "p" && !isCapture && !played.promotion && (ff === 0 || ff === 7)) {
+    aimlessEdge = aimlessEdgePawnV9(me, opp, from, to) ? 1 : 0
   }
   let castlePressure = 0, castleNoShield = 0
   if (isCastle) {
@@ -1100,6 +1143,7 @@ function moveFeaturesV9(uci, ctx, sh, bestSh, rank) {
   x[54] = ctx.imbalance * x[0]
   x[55] = castlePressure
   x[56] = castleNoShield
+  x[57] = aimlessEdge
   return x
 }
 
@@ -1542,7 +1586,7 @@ async function boot() {
     Array.isArray(styleModel.weights) && Array.isArray(styleModel.active) &&
     styleModel.active.length === styleModel.weights.length &&
     styleModel.active.every(i => Number.isInteger(i) && i >= 0 &&
-      i < (styleModel.features === "v9" ? 57 : 30))
+      i < (styleModel.features === "v9" ? 58 : 30))
   if (okModel) {
     engine.ready.then(() => engine.useMultipv())
   } else {
