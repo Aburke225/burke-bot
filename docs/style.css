@@ -98,9 +98,8 @@ body {
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.1s;
 }
-.login-btn:hover { border-color: var(--accent); }
 .theme-toggle {
   width: 38px;
   height: 38px;
@@ -112,10 +111,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
 .theme-toggle svg { width: 18px; height: 18px; }
-.theme-toggle:hover { border-color: var(--accent); }
+/* the header trio hovers exactly like Resign does - green edge, lifted,
+   surface-2 behind - so every button on the page behaves the same way */
+.login-btn:hover, .theme-toggle:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
 
 .top { margin-bottom: 1.8rem; row-gap: 0.4rem; }
 .wordmark {
@@ -371,6 +376,21 @@ footer a { color: var(--ink-2); }
 }
 
 .bb-me-input::placeholder { text-indent: 0.4em; }
+/* The UA focus ring is blue, which belongs to no part of this palette. Replaced
+   rather than removed - dropping outline without putting something back would
+   leave the field with no focus indicator at all. */
+.bb-me-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.3);
+}
+/* a rejected password says so in the border as well as the placeholder */
+.bb-me-input.bad,
+.bb-me-input.bad:focus {
+  border-color: var(--bad);
+  box-shadow: 0 0 0 2px rgba(var(--bad-rgb), 0.3);
+}
+.bb-me-input.bad::placeholder { color: var(--bad); }
 
 /* overlays: pick a color to start; the end screen when it's over */
 /* ---- the two players, above and below the board ------------------------

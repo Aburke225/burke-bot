@@ -1399,9 +1399,12 @@ function meClick() {
       input.disabled = false
       input.value = ""
       input.placeholder = "you are not Burke"
+      input.classList.add("bad")   // red ring to go with the placeholder
       input.focus()
     }
   })
+  // typing again clears the rejection, so the red does not outlive the mistake
+  input.addEventListener("input", () => input.classList.remove("bad"))
   input.addEventListener("blur", () => { if (!busy) done() })
 }
 
