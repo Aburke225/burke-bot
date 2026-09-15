@@ -399,7 +399,12 @@ footer a { color: var(--ink-2); }
    row's height and the panel opposite borrows it to line its first card up
    with the top of the board. */
 .player {
-  display: flex; align-items: center; gap: 0.6rem;
+  /* Bottom-anchored, not centred. The text column runs a shade taller than the
+     avatar - the +N badge's line box is 16.95px against the glyph's 15.72px -
+     and centring split that difference so the captures hung ~0.5px below the
+     icon. Aligning to the end pins the captures' bottom edge to the icon's
+     whatever the line-heights work out to. */
+  display: flex; align-items: flex-end; gap: 0.6rem;
   padding-left: var(--eval-w);
   min-height: var(--player-h);
 }
@@ -427,7 +432,9 @@ footer a { color: var(--ink-2); }
 }
 /* Reserved height even when empty: the first capture must not shove the board
    down the page mid-game. */
-.caps { display: flex; align-items: center; gap: 0.3rem; min-height: 1.2rem; flex-wrap: wrap; }
+/* the glyphs sit on the row's bottom edge too, so the pieces themselves line up
+   with the icon rather than floating inside a taller line box */
+.caps { display: flex; align-items: flex-end; gap: 0.3rem; min-height: 1.2rem; flex-wrap: wrap; }
 /* same-type pieces tuck into each other, and each group stands apart */
 .cap-group { display: flex; align-items: center; }
 .cap-group svg { width: 1.15rem; height: 1.15rem; display: block; }
