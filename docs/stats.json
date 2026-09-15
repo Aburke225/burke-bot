@@ -1,10 +1,10 @@
 {
-  "as_black": 186,
-  "as_white": 171,
-  "book_positions": 4264,
+  "as_black": 187,
+  "as_white": 172,
+  "book_positions": 4287,
   "bot_scale_strength": 1335,
   "draws": 13,
-  "games": 357,
+  "games": 359,
   "last_game": "2026-01-10",
   "losses": 174,
   "manual_games": 30,
@@ -132,8 +132,8 @@
     "King's Pawn Game": {
       "d": 12,
       "l": 125,
-      "n": 274,
-      "w": 137
+      "n": 276,
+      "w": 139
     },
     "Modern Defense": {
       "d": 0,
@@ -234,8 +234,8 @@
     "Scandinavian Defense": {
       "d": 0,
       "l": 10,
-      "n": 22,
-      "w": 12
+      "n": 23,
+      "w": 13
     },
     "Scotch Game": {
       "d": 2,
@@ -246,8 +246,8 @@
     "Sicilian Defense": {
       "d": 4,
       "l": 30,
-      "n": 68,
-      "w": 34
+      "n": 69,
+      "w": 35
     },
     "Slav Defense": {
       "d": 0,
@@ -295,7 +295,7 @@
   "openings_black": [
     [
       "Sicilian Defense",
-      56
+      57
     ],
     [
       "Owen Defense",
@@ -324,11 +324,11 @@
       40
     ],
     [
-      "Philidor Defense",
-      14
+      "Scandinavian Defense",
+      15
     ],
     [
-      "Scandinavian Defense",
+      "Philidor Defense",
       14
     ],
     [
@@ -344,7 +344,7 @@
       11
     ]
   ],
-  "site_games": 0,
+  "site_games": 2,
   "username": "Burkeley",
-  "wins": 170
+  "wins": 172
 }

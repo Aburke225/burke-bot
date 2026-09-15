@@ -229,10 +229,6 @@ def main():
                 game_fams.add(nm.split(":")[0].strip())
         note_opening_result(game_opening, game_fams, result, color)
 
-    stats["openings_white"] = stats["openings_white"].most_common(6)
-    stats["openings_black"] = stats["openings_black"].most_common(6)
-    stats["book_positions"] = len(book)
-
     # games played against the bot on the site (captured by the Worker; only
     # Andrew's own, flagged games are ever stored — and only HIS side's moves
     # go into the book, never the bot's replies)
@@ -290,6 +286,14 @@ def main():
     else:
         stats["bot_scale_strength"] = None
 
+    # The counters stay Counters until EVERY source has been folded in, site
+    # games included. Converting them earlier made note_opening_result() index
+    # a list with a string - which is exactly what crashed the first run that
+    # ever had a real site game to ingest, and is why the flywheel had never
+    # actually closed.
+    stats["book_positions"] = len(book)   # after the site games add to it too
+    stats["openings_white"] = stats["openings_white"].most_common(6)
+    stats["openings_black"] = stats["openings_black"].most_common(6)
     stats["opening_stats"] = dict(opening_stats)
 
     os.makedirs(WEB_DIR, exist_ok=True)
