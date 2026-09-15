@@ -231,6 +231,14 @@ body {
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .copy-btn svg { flex: none; width: 0.95rem; height: 0.95rem; }
+/* The tick needs a bigger box than the clipboard at EVERY width. Both sit in a
+   24x24 viewBox, but the clipboard's ink spans 20 of those 24 units in both
+   directions while the tick's polyline spans 16 wide and only 11 tall - so at
+   equal box sizes the tick paints 55% of the clipboard's height and reads as
+   undersized. 1.327x is the factor that brings it to ~73%, matching what the
+   desktop block does with its own larger pair. Base rule rather than a mobile
+   media query so the 521-860px range is covered too. */
+.copy-btn.done svg { width: 1.26rem; height: 1.26rem; }
 .copy-btn:hover { color: var(--ink); border-color: var(--border); background: var(--surface-2); }
 .copy-btn.done { color: var(--accent); border-color: var(--accent); }
 /* a quiet pulse in the footer: if the nightly job stops running, nothing else
