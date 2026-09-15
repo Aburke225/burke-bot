@@ -336,7 +336,9 @@ footer a { color: var(--ink-2); }
   .status-card { order: 1; }
   .moves-card  { order: 2; }
   .stats-card  { order: 3; }
-  .movelist { max-height: 160px; }
+  /* stacked: no board-bottom to respect, so a plain cap - it scrolls once
+     the game outgrows it, same as the desktop list does */
+  .movelist { max-height: min(38vh, 260px); }
   .controls { margin-top: 0.9rem; margin-left: var(--eval-w); }
   .controls .btn { width: auto; }
 }
@@ -344,6 +346,10 @@ footer a { color: var(--ink-2); }
 /* phones: the eval gutter slims down so the board keeps its width */
 @media (max-width: 520px) {
   .wrap { --eval-w: calc(1.45rem + 21px); }
+  /* three header buttons no longer fit beside the wordmark at this width, so
+     they keep their corner and the title drops below them */
+  .header-actions { top: 1.3rem; }
+  .top { padding-top: 2.6rem; }
   .eval-bar { left: calc(1.45rem + 4px); width: 11px; }
   .eval-num { width: 1.45rem; font-size: 0.6rem; }
 }
