@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard the game-capture path: the one that silently never ran.
+"""Guard the two data paths that only run when there is new data.
 
 On 2026-09-15 the first real captured game crashed build.py with
 
@@ -12,9 +12,14 @@ green - because site-games.json was always EMPTY, so the code path that breaks
 was never executed. A green run proved nothing.
 
 So this test does the one thing those runs never did: run the real build.main()
-with a NON-EMPTY store. It stubs the network (chess.com and the manual PGNs)
-and redirects every output into a temp directory, but the ingestion, the
-opening bookkeeping and the stats finalisation are the genuine article.
+with a NON-EMPTY store. It stubs the network but redirects every output into a
+temp directory; the ingestion, the opening bookkeeping and the stats
+finalisation are the genuine article.
+
+It covers the manual vs-computer PGN path for the same reason. Those games
+never come from chess.com's API - he exports them by hand - so that path also
+sits idle for weeks at a time, and it is the only source of the rating shown
+on the site.
 
     python3 pipeline/test_capture.py     # exits non-zero on failure
 """
@@ -41,6 +46,23 @@ API_PGN = """[Event "Live Chess"]
 [Link "https://www.chess.com/game/live/test-api"]
 
 1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 e5 1-0
+"""
+
+# The vs-computer export path. chess.com's public API never returns these, so
+# they only arrive when he manually drops a PGN into manual-pgn/ - which gives
+# this path exactly the same "only runs when there is new data" character that
+# let the site-games bug hide for a week. It is also the ONLY source of
+# bot_scale_strength, the rating shown on the site.
+MANUAL_PGN = """[Event "Computer Match"]
+[Site "Chess.com"]
+[White "Burkeley"]
+[Black "Wally-BOT"]
+[BlackElo "1800"]
+[Result "0-1"]
+[UTCDate "2026.01.02"]
+[Link "https://www.chess.com/game/computer/test-manual"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 0-1
 """
 
 # the shape the Cloudflare Worker really returns - verified against the live
@@ -71,7 +93,7 @@ def main():
     orig = (build.REPO_ROOT, build.WEB_DIR, build.api_games, build.manual_games)
     build.REPO_ROOT, build.WEB_DIR = tmp, web
     build.api_games = lambda: iter([(API_PGN, "api")])
-    build.manual_games = lambda: iter([])
+    build.manual_games = lambda: build.split_pgn(MANUAL_PGN)
     try:
         build.main()
     finally:
@@ -90,10 +112,18 @@ def main():
     # 1. the games were ingested at all - the headline regression
     check(stats["site_games"] == 2,
           f"site_games is {stats['site_games']}, expected 2")
-    check(stats["games"] == 3, f"total games is {stats['games']}, expected 3")
+    check(stats["games"] == 4, f"total games is {stats['games']}, expected 4")
+
+    # 1b. the manual vs-computer path - the other source that only runs when
+    #     he has dropped in new data, and the only thing that feeds the rating
+    check(stats["manual_games"] == 1,
+          f"manual_games is {stats['manual_games']}, expected 1")
+    check(stats["bot_scale_strength"] is not None,
+          "bot_scale_strength is None - the manual PGN's Elo never reached the "
+          "rating calculation, so the number on the site would go blank")
 
     # 2. they reached the TRAINING cache, not just the counters
-    check(len(cache) == 3, f"games-cache has {len(cache)} games, expected 3")
+    check(len(cache) == 4, f"games-cache has {len(cache)} games, expected 4")
 
     # 3. the ordering bug itself: counters must still be Counters while the
     #    site-games loop runs, and lists by the time they are written out
@@ -110,10 +140,11 @@ def main():
     check(stats["book_positions"] == len(book),
           f"book_positions {stats['book_positions']} != {len(book)} real entries")
 
-    # 5. only HIS side trains: the bot's replies must never enter the book
-    b1 = cache[1] if cache[1]["color"] == "b" else cache[2]
-    check(b1["moves"][0] == "e2e4",
-          "the site game's move list should be the whole game, both sides")
+    # 5. every source lands in the training cache as whole games
+    check(all(len(g["moves"]) >= 6 for g in cache),
+          "every cached game should carry its full move list")
+    check(sorted(g["color"] for g in cache) == ["b", "w", "w", "w"],
+          f"unexpected colours in the cache: {[g['color'] for g in cache]}")
 
     shutil.rmtree(tmp, ignore_errors=True)
     if fails:
