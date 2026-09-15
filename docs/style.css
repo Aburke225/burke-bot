@@ -176,8 +176,9 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  /* "from my games" / "on my own" read at the same size as the line below */
-  font-size: 1.02rem;
+  /* "from my games" / "on my own": halfway between the old 0.75rem label and
+     matching the line below at 1.02rem - matching it read too heavy */
+  font-size: 0.885rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--ink-2);
@@ -245,7 +246,9 @@ footer a { color: var(--ink-2); }
   color: var(--ink);
   border-radius: 10px;
   padding: 0 0.7rem;
-  width: 19ch;  /* fits the "you are not Burke" placeholder without clipping */
+  /* border-box means the padding eats into the ch width - 17 characters of
+     placeholder plus 1.4rem of padding needs the extra room */
+  width: 22ch;
 }
 
 /* overlays: pick a color to start; the end screen when it's over */
