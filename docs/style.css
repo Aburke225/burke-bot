@@ -15,8 +15,6 @@
      painted as stacked drop-shadows instead. Each edge contrasts with its own
      PIECE rather than with the page, so a black piece stays crisp on the dark
      ground and a white one stays crisp on the light. */
-  --pc-edge-b: #aab8a5;
-  --pc-edge-w: #161f13;
   --accent-dim: #527a4b;
   --sq-light: #e9ecd6;
   --sq-dark: #527a4b;
@@ -34,8 +32,6 @@
   --ink-2: #55684f;
   --accent: #3f5e3a;
   --accent-rgb: 63, 94, 58;
-  --pc-edge-b: #f7f9ee;
-  --pc-edge-w: #4a5c44;
   --accent-dim: #527a4b;
   color-scheme: light;
 }
@@ -417,13 +413,12 @@ footer a { color: var(--ink-2); }
   display: flex; align-items: center; justify-content: center;
   background: var(--surface-2); border: 1px solid var(--border);
 }
-.avatar svg { width: 100%; height: 100%; display: block; }
+.avatar svg { width: 100%; height: 100%; display: block; shape-rendering: geometricPrecision; }
 /* The bot wears a piece; the challenger wears a person. Two different KINDS of
    thing, so they are never mistaken for each other at a glance. */
 .avatar.bot { background: var(--sq-dark); border-color: var(--sq-dark); }
-.avatar.bot svg { width: 92%; height: 92%; }
-.avatar.human { color: var(--ink-2); }
-.avatar.human svg { width: 78%; height: 78%; }
+
+.avatar.human { background: var(--sq-dark); border-color: var(--sq-dark); }
 .pname {
   font-size: 0.92rem; font-weight: 600; color: var(--ink); white-space: nowrap;
   /* the body face is monospace, so a plain space between "Burke" and "Bot" is a
@@ -442,8 +437,14 @@ footer a { color: var(--ink-2); }
    and the four compounded into a lopsided smear with the piece off-centre in
    it. feMorphology grows the alpha equally in every direction instead, so the
    piece sits concentric in its ring. */
-#pc-edge-b feFlood { flood-color: var(--pc-edge-b); }
-#pc-edge-w feFlood { flood-color: var(--pc-edge-w); }
+/* SVG filters composite in linearRGB by DEFAULT - that is the spec, not a
+   browser quirk - so a flood declared as rgb(170,184,165) was being painted
+   through linear-space maths and came out a different colour from the +N text
+   beside it, which is plain CSS. sRGB makes the painted edge equal the declared
+   one. Both edges now read the same token the badge does, so they cannot drift
+   apart again. */
+#pc-edge-b, #pc-edge-w { color-interpolation-filters: sRGB; }
+#pc-edge-b feFlood, #pc-edge-w feFlood { flood-color: var(--ink-2); }
 .cap-group.cap-b svg { filter: url(#pc-edge-b); }
 .cap-group.cap-w svg { filter: url(#pc-edge-w); }
 .adv {

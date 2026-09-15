@@ -297,10 +297,20 @@ const CAP_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 }
 // the rest of the site's icons. The bot wears a knight on a board square - the
 // site's own mark, and the glyph is pulled from the board's sprite so it is
 // literally the same artwork the pieces are drawn from.
-const HUMAN_AVATAR =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<circle cx="12" cy="8" r="3.4"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>'
+const ICON_VIEWBOX = "-1.04 -1.04 26.09 26.09"
+const HUMAN_AVATAR = [
+  '<svg viewBox="' + ICON_VIEWBOX + '" aria-hidden="true">',
+  '<g fill="#e9ecd6">',
+  '<circle cx="12" cy="6.2" r="3.6"/>',
+  '<path d="M8.5 10.7h7l-.8 2H9.3z"/>',
+  '<path d="M9.4 12.5C9.4 15.5 8 17.3 6.4 18.5H17.6C16 17.3 14.6 15.5 14.6 12.5Z"/>',
+  '<path d="M5.4 18.3h13.2a1.1 1.1 0 0 1 1.1 1.1v1.5H4.3v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
+  '</g>',
+  '<g fill="#527a4b"><circle cx="10.3" cy="5.2" r=".78"/><circle cx="13.7" cy="5.2" r=".78"/></g>',
+  '<path d="M10.55 7.4Q12 8.55 13.45 7.4" fill="none" stroke="#527a4b" ' +
+    'stroke-width="1.15" stroke-linecap="round"/>',
+  '</svg>',
+].join("")
 const PIECE_VIEWBOX = "6 3 28 34"   // crops the sprite tile's padding
 // Burke Bot's portrait: the Chequerhead's face wearing the Warden's frame.
 // Rook battlements crown a head whose visor is eight squares of board, and it
@@ -309,7 +319,7 @@ const PIECE_VIEWBOX = "6 3 28 34"   // crops the sprite tile's padding
 // Drawn in the board's own two square colours, so it reads as a piece sitting
 // on a dark square.
 const BOT_AVATAR = [
-  '<svg viewBox="0 0 24 24" aria-hidden="true">',
+  '<svg viewBox="' + ICON_VIEWBOX + '" aria-hidden="true">',
   '<defs><clipPath id="bb-visor">',
   '<rect x="6.6" y="8.4" width="10.8" height="5.4" rx="1"/>',
   '</clipPath></defs>',
@@ -365,8 +375,13 @@ function renderCaptures() {
   // differencing the board: a promotion removes a pawn and adds a queen
   // without anyone capturing anything, and board-differencing would report a
   // phantom captured pawn for the rest of the game.
+  // Only the moves up to the ply being VIEWED, so stepping back through the
+  // game un-takes the pieces instead of showing the final tally at move 3.
+  const hist = chess.history({ verbose: true })
+  const upto = viewPly === -1 ? hist.length : viewPly
   const taken = { w: {}, b: {} }
-  for (const m of chess.history({ verbose: true })) {
+  for (let i = 0; i < upto; i++) {
+    const m = hist[i]
     if (!m.captured) continue
     const victim = m.color === "w" ? "b" : "w"
     taken[victim][m.captured] = (taken[victim][m.captured] || 0) + 1
@@ -375,12 +390,15 @@ function renderCaptures() {
   // The +N comes from the pieces actually on the board, which IS what a player
   // means by being up material - and unlike the capture list it counts a
   // promotion, which changes the balance by eight points with no capture.
+  // ...and the +N from the board as it stood at that ply. Counting the FEN's
+  // placement field is the cheapest way to do it without a second chess.js
+  // instance; CAP_VAL has no king, so kings, digits and slashes all fall through.
+  const placement = (viewPly === -1 ? chess.fen() : fenAtPly(viewPly)).split(" ")[0]
   let mat = 0
-  for (const row of chess.board()) {
-    for (const sq of row) {
-      if (!sq || sq.type === "k") continue
-      mat += (sq.color === "w" ? 1 : -1) * CAP_VAL[sq.type]
-    }
+  for (const ch of placement) {
+    const type = ch.toLowerCase()
+    if (!CAP_VAL[type]) continue
+    mat += (ch === type ? -1 : 1) * CAP_VAL[type]
   }
 
   const userColor = botColor === "w" ? "b" : "w"
@@ -628,6 +646,7 @@ function browseTo(k) {
   }
   const fen = live ? chess.fen() : fenAtPly(k)
   boardRef.setPosition(fen, true)
+  renderCaptures()   // the rows describe the position on the board
   // pieces only move at the live position, on the user's turn
   try { boardRef.disableMoveInput() } catch (e) {}
   if (live && gameActive && chess.turn() !== botColor) {
