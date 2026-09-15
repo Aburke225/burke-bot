@@ -37,6 +37,11 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(REPO_ROOT, "pipeline", "examples-v9.npz")
 STYLE = os.path.join(REPO_ROOT, "docs", "style-v9.json")
 NEG = -1e9  # logit for a padded candidate slot
+# Shown on the site next to the wordmark. MAJOR is the feature contract (v9);
+# bump MINOR whenever the contract changes - it went 55 features, then 57 with
+# the castle-safety pair, then 58 with aimless_edge_pawn. A plain retrain on new
+# games does NOT bump it: same contract, same version, new weights.
+VERSION = "9.3"
 
 
 def nll_and_grad(w, X, M, y, lam):
@@ -187,6 +192,7 @@ def main():
 
     json.dump({
         "features": "v9",
+        "version": VERSION,
         "n_features": N_FEATURES,
         "names": FEATURE_NAMES,
         "active": list(range(N_FEATURES)),

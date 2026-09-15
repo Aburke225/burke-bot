@@ -1592,6 +1592,12 @@ async function boot() {
   } else {
     styleModel = null
   }
+  const verEl = document.getElementById("model-version")
+  if (verEl && styleModel && styleModel.version) {
+    verEl.textContent = styleModel.version
+    verEl.hidden = false
+    verEl.title = `style model v${styleModel.version} - ${styleModel.n_features} features`
+  }
   renderStats(stats)
 
   const meBtn = document.getElementById("bb-login")

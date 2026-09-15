@@ -111,6 +111,17 @@ body {
   margin: 0 0 0.4rem;
   letter-spacing: 0.01em;
 }
+/* the model version, small and quiet beside the wordmark - it is a build
+   stamp, not part of the name, so it uses the body face rather than the slab */
+.wordmark .version {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.3em;
+  font-weight: 400;
+  vertical-align: 0.9em;
+  margin-left: 0.35em;
+  letter-spacing: 0;
+  color: var(--ink-2);
+}
 .tagline { color: var(--ink-2); margin: 0; max-width: 46rem; }
 
 /* the board grows with the WINDOW, the way chess.com and lichess both do.

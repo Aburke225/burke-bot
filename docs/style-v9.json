@@ -185,5 +185,6 @@
  "examples": 9431,
  "pool": 20,
  "out_of_fold_mean_p": 0.31148890296164333,
- "out_of_fold_top1": 0.44589800801605695
+ "out_of_fold_top1": 0.44589800801605695,
+ "version": "9.3"
 }
