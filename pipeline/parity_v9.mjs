@@ -53,11 +53,19 @@ const perFeature = new Array(api.V9_N).fill(0)
 let lastKey = null, ctx = null
 
 for (const c of cases) {
-  const key = c.moves.join(" ")
+  // a case is either a move list (history intact, so the context has a real
+  // previous move) or a bare FEN, used for endgames that would take forty
+  // moves of SAN to reach. With a FEN there is no history and the context's
+  // previous-move fields are null on BOTH sides, which is the point.
+  const key = c.fen ? "fen:" + c.fen : c.moves.join(" ")
   if (key !== lastKey) {
-    chess.reset()
-    for (const u of c.moves) {
-      chess.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u.slice(4) || undefined })
+    if (c.fen) {
+      chess.load(c.fen)
+    } else {
+      chess.reset()
+      for (const u of c.moves) {
+        chess.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u.slice(4) || undefined })
+      }
     }
     ctx = api.decisionContextV9()
     lastKey = key
@@ -79,7 +87,7 @@ for (const c of cases) {
       for (let k = 0; k < api.V9_N; k++) {
         if (Math.abs(x[k] - c.x[k]) > 1e-6) diffs.push(`${k}: js ${x[k]} vs py ${c.x[k]}`)
       }
-      console.log(`MISMATCH ${c.uci} after ${c.moves.length} plies -> ${diffs.join(", ")}`)
+      console.log(`MISMATCH ${c.uci} in ${c.fen || c.moves.length + " plies"} -> ${diffs.join(", ")}`)
     }
   }
 }

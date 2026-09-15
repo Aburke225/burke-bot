@@ -21,6 +21,12 @@ jobs:
 
       - run: pip install python-chess numpy
 
+      # Before anything touches the real data: prove the capture path still
+      # works with a NON-EMPTY store. That path silently never ran for a week
+      # and every run was green, because site-games.json was always empty.
+      - name: guard the capture path
+        run: python pipeline/test_capture.py
+
       - name: pull the games played on the site
         env:
           CHESS_KEY: ${{ secrets.CHESS_KEY }}
