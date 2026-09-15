@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
   <div class="wrap">
@@ -74,7 +74,11 @@
         </div>
 
         <div class="moves-card">
-          <h2>Moves</h2>
+          <div class="moves-head">
+            <h2>Moves</h2>
+            <button type="button" class="copy-btn" id="copy-moves"
+                    aria-label="Copy the move list" title="Copy the move list"></button>
+          </div>
           <ol class="movelist" id="movelist"></ol>
         </div>
 
@@ -91,7 +95,7 @@
 
     <footer>
       <div class="foot-rule"></div>
-      <div class="foot-inner">&copy; 2026 <a href="https://aburke225.github.io">Andrew Burke</a> &middot; <a href="https://github.com/Aburke225/burke-bot">Source on GitHub</a> &middot; games from <a href="https://www.chess.com/member/Burkeley">chess.com/Burkeley</a></div>
+      <div class="foot-inner">&copy; 2026 <a href="https://aburke225.github.io">Andrew Burke</a> &middot; <a href="https://github.com/Aburke225/burke-bot">Source on GitHub</a> &middot; games from <a href="https://www.chess.com/member/Burkeley">chess.com/Burkeley</a><span class="heartbeat" id="heartbeat" hidden></span></div>
     </footer>
   </div>
   <script>
@@ -121,6 +125,6 @@
       render();
     })();
   </script>
-  <script type="module" src="app.js?v=50"></script>
+  <script type="module" src="app.js?v=51"></script>
 </body>
 </html>

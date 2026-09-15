@@ -8,7 +8,6 @@ on:
 permissions:
   contents: write
   pages: write
-  issues: write   # so a failure can raise one - see the alert step below
 
 jobs:
   build:
@@ -72,12 +71,23 @@ jobs:
         if: steps.gate.outputs.changed == 'yes'
         run: python pipeline/train_v9.py
 
+      # Written on every successful run, including the no-op ones. A missed
+      # cron is invisible otherwise: no run means no failure means no email.
+      - name: stamp the heartbeat
+        run: |
+          printf '{"utc":"%s","retrained":%s}\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "${{ steps.gate.outputs.changed == 'yes' && 'true' || 'false' }}" \
+            > docs/last-run.json
+
       - name: commit and push
-        if: steps.gate.outputs.changed == 'yes'
         run: |
           git config user.name "Andrew Burke"
           git config user.email "aburke225@berkeley.edu"
-          git add docs/book.json docs/stats.json docs/style-v9.json pipeline/games-fingerprint.txt
+          git add docs/last-run.json
+          if [ "${{ steps.gate.outputs.changed }}" = "yes" ]; then
+            git add docs/book.json docs/stats.json docs/style-v9.json pipeline/games-fingerprint.txt
+          fi
           if [ -f pipeline/site-games.json ]; then git add pipeline/site-games.json; fi
           if git diff --cached --quiet; then
             echo "nothing to commit"
@@ -89,37 +99,4 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${{ github.repository }}/pages/builds" || true
-          fi
-
-      # A failed run has to reach him. GitHub's own "workflow failed" email
-      # depends on notification settings and is easy to miss; an issue is hard
-      # to miss and carries the log link. Reuses one open issue rather than
-      # opening a fresh one every night if it keeps failing.
-      - name: raise an issue if the nightly update failed
-        if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          existing=$(gh issue list --label nightly-failure --state open \
-                      --json number --jq '.[0].number' 2>/dev/null || echo "")
-          body="@${{ github.repository_owner }} the nightly book/model update failed.
-
-          Run: $RUN_URL
-
-          Nothing is lost - the retrain is gated on a games fingerprint, so the
-          next successful run picks up everything that accumulated in the
-          meantime. But it will keep failing until this is fixed."
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "@${{ github.repository_owner }} failed again: $RUN_URL"
-          else
-            gh label create nightly-failure --color b60205 --force >/dev/null 2>&1 || true
-            # ASSIGNED and @mentioned on purpose. A plain new issue only
-            # notifies someone watching "All Activity"; being assigned or
-            # mentioned is a "participating" event, which is the category that
-            # stays on even when watching is turned down.
-            gh issue create --title "Nightly update is failing" \
-              --label nightly-failure \
-              --assignee "${{ github.repository_owner }}" \
-              --body "$body"
           fi

@@ -1601,6 +1601,68 @@ async function boot() {
   } else {
     styleModel = null
   }
+  // copy the move list: people reach for this to paste a game into an
+  // analysis board, and highlighting a two-column scrolling list by hand is
+  // miserable. Writes standard PGN movetext, not what is on screen.
+  const copyBtn = document.getElementById("copy-moves")
+  if (copyBtn) {
+    const COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+    const DONE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>'
+    copyBtn.innerHTML = COPY_ICON
+    copyBtn.addEventListener("click", async () => {
+      const hist = chess.history()
+      if (!hist.length) return
+      let text = ""
+      for (let i = 0; i < hist.length; i += 2) {
+        text += (i / 2 + 1) + ". " + hist[i] + (hist[i + 1] ? " " + hist[i + 1] : "") + " "
+      }
+      text = text.trim()
+      let ok = true
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch (e) {
+        // clipboard API needs a secure context and permission; fall back to
+        // the old selection trick rather than failing silently
+        try {
+          const ta = document.createElement("textarea")
+          ta.value = text
+          ta.style.cssText = "position:fixed;opacity:0"
+          document.body.appendChild(ta)
+          ta.select()
+          ok = document.execCommand("copy")
+          ta.remove()
+        } catch (e2) { ok = false }
+      }
+      copyBtn.innerHTML = ok ? DONE_ICON : COPY_ICON
+      copyBtn.classList.toggle("done", ok)
+      copyBtn.title = ok ? "Copied" : "Could not copy"
+      setTimeout(() => {
+        copyBtn.innerHTML = COPY_ICON
+        copyBtn.classList.remove("done")
+        copyBtn.title = "Copy the move list"
+      }, 1400)
+    })
+  }
+
+  // heartbeat: the nightly job stamps this on EVERY successful run, including
+  // the no-op ones. A cron that stops firing produces no failure and so no
+  // email - this is the only thing on the page that would ever say so.
+  fetch("last-run.json?t=" + Date.now()).then(r => r.ok ? r.json() : null).then(hb => {
+    const el = document.getElementById("heartbeat")
+    if (!el || !hb || !hb.utc) return
+    const ageH = (Date.now() - Date.parse(hb.utc)) / 36e5
+    if (!isFinite(ageH)) return
+    const stale = ageH > 36
+    el.textContent = stale
+      ? ` \u00b7 last update ${Math.floor(ageH / 24)}d ago`
+      : ` \u00b7 updated ${ageH < 1 ? "just now" : Math.floor(ageH) + "h ago"}`
+    el.classList.toggle("stale", stale)
+    el.title = stale
+      ? "The nightly update has not run in over 36 hours - check the Actions tab"
+      : `nightly update ran ${hb.utc}` + (hb.retrained ? " and retrained" : "")
+    el.hidden = false
+  }).catch(() => {})
+
   const verEl = document.getElementById("model-version")
   if (verEl && styleModel && styleModel.version) {
     verEl.textContent = "v" + styleModel.version

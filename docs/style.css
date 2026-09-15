@@ -211,6 +211,28 @@ body {
 
 .status-line { margin: 0; font-size: 1.02rem; }
 
+.moves-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.moves-head h2 { margin-bottom: 0; }
+.copy-btn {
+  flex: none;
+  width: 1.7rem; height: 1.7rem;
+  margin-bottom: 0.55rem;   /* sit on the same line the heading already claims */
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.copy-btn svg { width: 0.95rem; height: 0.95rem; }
+.copy-btn:hover { color: var(--ink); border-color: var(--border); background: var(--surface-2); }
+.copy-btn.done { color: var(--accent); border-color: var(--accent); }
+/* a quiet pulse in the footer: if the nightly job stops running, nothing else
+   on the page would ever say so */
+.heartbeat { margin-left: 0.5rem; }
+.heartbeat.stale { color: #d9a441; }
+
 .moves-card h2, .stats-card h2 {
   font-family: "Fraunces", serif;
   font-weight: 500;
