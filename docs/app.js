@@ -358,15 +358,15 @@ function pieceGlyph(colour, type) {
 // the Caped option's cape. The coronet is raised 0.7 units from where it sat in
 // the option sheet so more of it clears the skull - it is drawn BEFORE the head,
 // so the head covers its lower half and only the part above the crown line
-// shows. The cape takes the board's lighter green rather than the figure's
+// shows. Raised twice now, 0.7 units each time. The cape takes the board's lighter green rather than the figure's
 // cream: a cream cape behind a cream body merged into one blob at 44px, and a
 // hairline between them was not enough.
 const BURKE_AVATAR = [
-  '<svg viewBox="-2.2 -2.76 28.4 28.4" aria-hidden="true">',
+  '<svg viewBox="-2.2 -3.11 28.4 28.4" aria-hidden="true">',
   '<path d="M9.7 10.8C6.1 12.7 3.4 16.7 2.4 21.5h19.2c-1-4.8-3.7-8.8-7.3-10.7z" fill="#8fc57f"/>',
   '<g fill="#e9ecd6">',
-  '<path d="M7.2 6.5 7.9 2.7 9.9 4.7 12 1.9 14.1 4.7 16.1 2.7 16.8 6.5Z"/>',
-  '<circle cx="7.9" cy="2.7" r=".82"/><circle cx="12" cy="1.9" r=".82"/><circle cx="16.1" cy="2.7" r=".82"/>',
+  '<path d="M7.2 5.8 7.9 2 9.9 4 12 1.2 14.1 4 16.1 2 16.8 5.8Z"/>',
+  '<circle cx="7.9" cy="2" r=".82"/><circle cx="12" cy="1.2" r=".82"/><circle cx="16.1" cy="2" r=".82"/>',
   '<circle cx="12" cy="8.1" r="3.8"/>',
   '<path d="M8.5 11.6h7l-.8 2H9.3z"/>',
   '<path d="M9.4 13.4C9.4 16.4 8 18.2 6.4 19.4H17.6C16 18.2 14.6 16.4 14.6 13.4Z"/>',
