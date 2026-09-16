@@ -375,16 +375,20 @@ footer a { color: var(--ink-2); }
 /* The UA focus ring is blue, which belongs to no part of this palette. Replaced
    rather than removed - dropping outline without putting something back would
    leave the field with no focus indicator at all. */
+/* An outward box-shadow spreads BEYOND the element, so the ring floated outside
+   the field's edge. Colouring the border the field already reserves and adding
+   an inset shadow just within it keeps the whole ring on the perimeter - the
+   same fix the copy button needed. */
 .bb-me-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.3);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 /* a rejected password says so in the border as well as the placeholder */
 .bb-me-input.bad,
 .bb-me-input.bad:focus {
   border-color: var(--bad);
-  box-shadow: 0 0 0 2px rgba(var(--bad-rgb), 0.3);
+  box-shadow: inset 0 0 0 1px var(--bad);
 }
 .bb-me-input.bad::placeholder { color: var(--bad); }
 

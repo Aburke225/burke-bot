@@ -308,8 +308,8 @@ const HUMAN_AVATAR = [
   // pixel, which is the other half of the graininess.
   '<circle cx="12" cy="6.4" r="4.2"/>',
   '<path d="M8.5 11.5h7l-.8 2H9.3z"/>',
-  '<path d="M9.4 13.3C9.4 16.3 8 18.1 6.4 19.3H17.6C16 18.1 14.6 16.3 14.6 13.3Z"/>',
-  '<path d="M5.4 19.1h13.2a1.1 1.1 0 0 1 1.1 1.1v1.5H4.3v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
+  '<path d="M9.71 13.3C9.71 16.3 8.48 18.1 7.07 19.3H16.93C15.52 18.1 14.29 16.3 14.29 13.3Z"/>',
+  '<path d="M6.32 19.1h11.36a1.1 1.1 0 0 1 1.1 1.1v1.5H5.22v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
   '</g>',
   '<g fill="#527a4b"><circle cx="10.15" cy="5.3" r=".85"/><circle cx="13.85" cy="5.3" r=".85"/></g>',
   '<path d="M10.4 7.8Q12 9.1 13.6 7.8" fill="none" stroke="#527a4b" ' +
@@ -362,15 +362,15 @@ function pieceGlyph(colour, type) {
 // cream: a cream cape behind a cream body merged into one blob at 44px, and a
 // hairline between them was not enough.
 const BURKE_AVATAR = [
-  '<svg viewBox="-2.2 -3.11 28.4 28.4" aria-hidden="true">',
+  '<svg viewBox="-2.2 -3.18 28.4 28.4" aria-hidden="true">',
   '<path d="M9.7 10.8C6.1 12.7 3.4 16.7 2.4 21.5h19.2c-1-4.8-3.7-8.8-7.3-10.7z" fill="#8fc57f"/>',
   '<g fill="#e9ecd6">',
   '<path d="M7.2 5.8 7.9 2 9.9 4 12 1.2 14.1 4 16.1 2 16.8 5.8Z"/>',
-  '<circle cx="7.9" cy="2" r=".82"/><circle cx="12" cy="1.2" r=".82"/><circle cx="16.1" cy="2" r=".82"/>',
+  '<circle cx="7.9" cy="2" r=".95"/><circle cx="12" cy="1.2" r=".95"/><circle cx="16.1" cy="2" r=".95"/>',
   '<circle cx="12" cy="8.1" r="3.8"/>',
   '<path d="M8.5 11.6h7l-.8 2H9.3z"/>',
-  '<path d="M9.4 13.4C9.4 16.4 8 18.2 6.4 19.4H17.6C16 18.2 14.6 16.4 14.6 13.4Z"/>',
-  '<path d="M5.4 19.2h13.2a1.1 1.1 0 0 1 1.1 1.1v1.5H4.3v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
+  '<path d="M9.71 13.4C9.71 16.4 8.48 18.2 7.07 19.4H16.93C15.52 18.2 14.29 16.4 14.29 13.4Z"/>',
+  '<path d="M6.32 19.2h11.36a1.1 1.1 0 0 1 1.1 1.1v1.5H5.22v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
   '</g>',
   '<g fill="#527a4b"><circle cx="10.15" cy="7" r=".85"/><circle cx="13.85" cy="7" r=".85"/></g>',
   '<path d="M10.4 9.5Q12 10.8 13.6 9.5" fill="none" stroke="#527a4b" ' +
