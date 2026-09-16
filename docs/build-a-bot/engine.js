@@ -1,10 +1,10 @@
-// Mirror Bot: Stockfish WASM in a Worker.
+// Build-a-Bot: Stockfish WASM in a Worker.
 //
 // Same engine and same protocol as the Burke Bot page (docs/app.js), with two
 // differences that matter here:
 //
 //   1. analyse(fen, depth, multipv) is a single generic entry point, because
-//      Mirror Bot runs the WHOLE pipeline in the browser - the deep pass that
+//      Build-a-Bot runs the WHOLE pipeline in the browser - the deep pass that
 //      ranks candidates and the shallow pass that models what a player can see
 //      over the board are the same call at different depths.
 //   2. The 7.0 MB .wasm comes from jsDelivr, verified by Subresource Integrity,
@@ -94,7 +94,7 @@ export function setFallbackHook(fn) {
 function reportFallback(hook, info) {
   for (const fn of [hook, globalFallbackHook]) {
     if (!fn) continue
-    try { fn(info) } catch (e) { console.warn("mirror/engine: fallback hook threw", e) }
+    try { fn(info) } catch (e) { console.warn("build-a-bot/engine: fallback hook threw", e) }
   }
 }
 

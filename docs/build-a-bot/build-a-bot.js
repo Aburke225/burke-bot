@@ -1,4 +1,4 @@
-// Mirror Bot - the page controller.
+// Build-a-Bot - the page controller.
 //
 // It owns the four views (setup, building, result, board), the routing between
 // them, and the wiring to the five modules that do the actual work:
@@ -37,6 +37,10 @@ const state = {
   abort: null,
   muted: false,
   sliderTouched: false,
+  // PGN the player dropped in: chess.com bot games, or anything else no API
+  // will hand over. Parsed on arrival, merged at build time.
+  scan: null,          // exact chess.com counts, once the archive has been read
+  upload: { games: [], read: 0, skipped: { notYours: 0, speed: 0, variant: 0, tooShort: 0, unreadable: 0 } },
 }
 
 /* ---------------------------------------------------------------- routing */
@@ -84,7 +88,7 @@ function setMuted(m) {
   b.setAttribute("aria-label", m ? "Unmute sounds" : "Mute sounds")
   b.title = b.getAttribute("aria-label")
   if (state.game) state.game.setMuted(m)
-  try { localStorage.setItem("mirror-sound", m ? "off" : "on") } catch (e) {}
+  try { localStorage.setItem("build-a-bot-sound", m ? "off" : "on") } catch (e) {}
 }
 
 /* ------------------------------------------------------- the copy control */
@@ -171,6 +175,7 @@ async function runLookup() {
 
   for (const el of [$("cc-ok"), $("li-ok")]) el.hidden = true
   state.profiles = {}
+  state.scan = null
   const msg = $("acct-msg")
   msg.hidden = true
   msg.className = "note"
@@ -203,14 +208,79 @@ async function runLookup() {
     return
   }
   renderSpeeds()
+  startArchiveScan()
 }
+
+// ---------- exact chess.com counts ----------
+
+// /stats answers instantly but only knows rated ladder records, so the first
+// numbers on screen are a floor. This reads every month of the archive and
+// replaces them with the real ones - the only place a casual game exists. It
+// runs in the background because the page is already useful without it, and it
+// is cancelled and restarted whenever the username changes.
+let scanToken = 0
+
+async function startArchiveScan() {
+  const prof = state.profiles.chesscom
+  const token = ++scanToken
+  if (!prof) return
+
+  const done = Games.getArchiveScan(prof.username)
+  if (done) { applyScan(done); return }
+
+  const note = $("speeds-msg")
+  note.hidden = false
+  note.innerHTML = "Counting your casual games&hellip;"
+  try {
+    const scan = await Games.scanChesscomArchive(prof.username, {}, (p) => {
+      if (token !== scanToken) return
+      note.innerHTML = `Counting your casual games&hellip; <b>${p.found.toLocaleString("en-US")}</b> so far ` +
+        `(${p.done} of ${p.total} months)`
+    })
+    if (token !== scanToken) return
+    applyScan(scan)
+  } catch (err) {
+    if (token !== scanToken) return
+    // The floor is still a usable number, so a failed scan is a note, not an
+    // error state: say what is missing rather than pretending nothing happened.
+    note.innerHTML = "Could not read your full archive, so these are chess.com's " +
+      "rated totals only - casual games are still downloaded and learned from."
+  }
+}
+
+function applyScan(scan) {
+  state.scan = scan
+  const casual = scan.total - SPEEDS_ALL.reduce((a, s) => a + (scan.ratedCounts[s] || 0), 0)
+  renderSpeeds()
+  const note = $("speeds-msg")
+  // Two things changed at once and both need saying, because one of these
+  // numbers can go DOWN. Casual games come in (chess.com's profile totals
+  // cannot see them - burkeley's only bullet and only blitz game are both
+  // casual, and /stats does not even carry a key for those pools), while games
+  // too short to learn from drop out (a 6-move resignation counts on a ladder
+  // but teaches nothing). What is left is the number of games that will
+  // actually be used, which is the only number worth putting on a slider.
+  note.innerHTML =
+    (casual > 0
+      ? `Read from your whole archive, casual games included &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual, which chess.com's profile totals leave out. `
+      : "Read from your whole archive. ") +
+    "Games too short to learn from are already taken out, so this is what the bot actually gets."
+  note.hidden = false
+  updateSlider()
+}
+
+const SPEEDS_ALL = ["bullet", "blitz", "rapid", "classical", "daily"]
 
 function renderSpeeds() {
   // Pool the counts across whichever accounts were given, and show only the
   // speeds the player has actually played. A row reading "0" is noise.
   const counts = {}
-  for (const p of Object.values(state.profiles)) {
-    for (const [sp, n] of Object.entries(p.counts || {})) {
+  for (const [site, p] of Object.entries(state.profiles)) {
+    // For chess.com, an exact archive scan replaces the profile's rated-only
+    // ladder totals outright rather than adding to them - the two count the
+    // same games, and the scan is the one that can see a casual game.
+    const src = site === "chesscom" && state.scan ? state.scan.counts : (p.counts || {})
+    for (const [sp, n] of Object.entries(src)) {
       if (n > 0) counts[sp] = (counts[sp] || 0) + n
     }
   }
@@ -235,10 +305,124 @@ function renderSpeeds() {
 
   // the bots control is lichess-only: chess.com's public API has no computer
   // games at all, so offering it there would describe a filter that does nothing
-  $("bots-wrap").hidden = !state.profiles.lichess
+  showBotControls()
+
+  // These counts come from each site's profile, and chess.com's only publishes
+  // RATED ladder records - burkeley reads 307 rapid / 2 daily there while the
+  // game archive actually holds 331. So with casual games included the numbers
+  // below are a floor, not a total. Saying so beats letting someone conclude
+  // their casual games were thrown away, which is the one thing that is not
+  // happening. lichess counts every perf, so it needs no such caveat.
+  // The note is owned by the scan (startArchiveScan / applyScan), which knows
+  // whether these numbers are the rated floor, a count in progress, or exact.
+  if (!state.profiles.chesscom) $("speeds-msg").hidden = true
   $("card-speeds").hidden = false
   $("card-count").hidden = false
   updateSlider()
+}
+
+// ---------- uploaded PGN ----------
+
+// chess.com publishes no games against its own bots, so a file the player
+// exports is the only way they reach the fit. Kept in state rather than parsed
+// at build time so the count can be shown the moment a file lands and a bad
+// file is reported while there is still something to do about it.
+function uploadNames() {
+  return Object.values(state.profiles).map((p) => p.username).filter(Boolean)
+}
+
+// Who shows what.
+//
+//   lichess only      - the checkbox. lichess publishes its bot games, so there
+//                       is nothing to upload.
+//   chess.com only    - the upload button, because chess.com publishes none.
+//                       Once a file is in, the button has done its job: it
+//                       becomes the same checked checkbox, which is now what
+//                       decides whether those games are used.
+//   both              - the checkbox (for lichess) and the button (for
+//                       chess.com) side by side, until the upload lands and
+//                       the button goes the same way.
+function showBotControls() {
+  const uploaded = state.upload.games.length > 0
+  const lichess = !!state.profiles.lichess
+  const chesscom = !!state.profiles.chesscom
+  $("bots-wrap").hidden = !(lichess || uploaded)
+  $("drop-wrap").hidden = !chesscom || uploaded
+  // Uploading is itself the decision to include them; arriving unticked would
+  // throw away the file the player just went and fetched.
+  if (uploaded) $("bots").checked = true
+}
+
+function describeUpload() {
+  const msg = $("pgn-msg")
+  const u = state.upload
+  if (!u || (!u.games.length && !u.read)) { msg.hidden = true; return }
+  const n = u.games.length
+  const bits = [`<b>${n.toLocaleString("en-US")}</b> game${n === 1 ? "" : "s"} added`]
+  // Say what was dropped and why. A silent skip on an upload reads as the file
+  // not having worked, and the commonest cause by far is the wrong username.
+  const s = u.skipped
+  if (s.notYours) bits.push(`${s.notYours} not yours`)
+  if (s.speed) bits.push(`${s.speed} outside the game types above`)
+  if (s.variant) bits.push(`${s.variant} not standard chess`)
+  if (s.tooShort) bits.push(`${s.tooShort} too short`)
+  if (s.unreadable) bits.push(`${s.unreadable} unreadable`)
+  msg.innerHTML = bits.join(" &middot; ") +
+    (n ? "" : ` &mdash; is the username on those games one of the ones above?`)
+  msg.hidden = false
+}
+
+async function takeFiles(files) {
+  const list = [...files].filter((f) => f && f.size)
+  if (!list.length) return
+  const names = uploadNames()
+  if (!names.length) return
+  const { parsePgn, gameKey } = await import("./games.js")
+
+  const seen = new Set((state.upload.games || []).map(gameKey))
+  const skipped = state.upload.skipped
+  for (const f of list) {
+    let text
+    try { text = await f.text() } catch { skipped.unreadable++; continue }
+    const r = parsePgn(text, { usernames: names, speeds: [...state.speeds] })
+    state.upload.read += r.read
+    for (const k of Object.keys(skipped)) skipped[k] += r.skipped[k] || 0
+    // Dropping the same file twice must not double its games.
+    for (const g of r.games) {
+      const k = gameKey(g)
+      if (seen.has(k)) continue
+      seen.add(k)
+      state.upload.games.push(g)
+    }
+  }
+  describeUpload()
+  showBotControls()
+  updateSlider()
+}
+
+function wireUpload() {
+  const wrap = $("drop-wrap")
+  const input = $("pgn")
+  $("pgn-btn").addEventListener("click", () => input.click())
+  // it now moves the game total, so the slider and the build button have to
+  // hear about it
+  $("bots").addEventListener("change", () => { describeUpload(); updateSlider() })
+  input.addEventListener("change", () => { takeFiles(input.files); input.value = "" })
+
+  // dragover must be cancelled or the browser navigates to the file instead
+  for (const ev of ["dragenter", "dragover"]) {
+    wrap.addEventListener(ev, (e) => { e.preventDefault(); wrap.classList.add("over") })
+  }
+  for (const ev of ["dragleave", "drop"]) {
+    wrap.addEventListener(ev, (e) => { e.preventDefault(); wrap.classList.remove("over") })
+  }
+  wrap.addEventListener("drop", (e) => {
+    if (e.dataTransfer && e.dataTransfer.files) takeFiles(e.dataTransfer.files)
+  })
+  // a file dropped anywhere else would otherwise replace the page
+  for (const ev of ["dragover", "drop"]) {
+    window.addEventListener(ev, (e) => { if (e.target.closest && !e.target.closest("#drop-wrap")) e.preventDefault() })
+  }
 }
 
 function onSpeedChange(ev) {
@@ -258,7 +442,18 @@ function onSpeedChange(ev) {
 function selectedTotal() {
   let n = 0
   for (const sp of state.speeds) n += state.counts[sp] || 0
-  return n
+  // Uploaded games are real games and they count. parsePgn already applied the
+  // speed choices above, and the build dedupes against the archive, so at worst
+  // this over-counts by the overlap and the slider offers a few games the
+  // download quietly folds together.
+  return n + uploadedInPlay()
+}
+
+// Uploaded games only count while the include-bot-games box is ticked, because
+// that is the box that decides whether the build uses them.
+function uploadedInPlay() {
+  const box = document.getElementById("bots")
+  return box && box.checked ? state.upload.games.length : 0
 }
 
 // The ladder, as data. BEST_FROM is read by the slider so its opening value is
@@ -290,7 +485,7 @@ function prettyTime(secs) {
 }
 
 function grandTotal() {
-  return Object.values(state.counts).reduce((a, b) => a + b, 0)
+  return Object.values(state.counts).reduce((a, b) => a + b, 0) + uploadedInPlay()
 }
 
 // Distinguishes "you have almost no games" from "you have plenty, just not in
@@ -302,7 +497,7 @@ function shortfallMessage(total, grand) {
   if (grand < MIN_GAMES) {
     const n = grand === 0 ? "no games" : `only ${grand} game${grand === 1 ? "" : "s"}`
     return {
-      text: `${who} has ${n} we can read. Mirror Bot needs at least ${MIN_GAMES} ` +
+      text: `${who} has ${n} we can read. Build-a-Bot needs at least ${MIN_GAMES} ` +
             `to build anything worth calling a bot of you.`,
       cls: "note bad",
     }
@@ -310,7 +505,7 @@ function shortfallMessage(total, grand) {
   const spare = grand - total
   return {
     text: `Only ${total} game${total === 1 ? "" : "s"} in the types you have picked. ` +
-          `Mirror Bot needs at least ${MIN_GAMES} to build a bot of you &mdash; ` +
+          `Build-a-Bot needs at least ${MIN_GAMES} to build a bot of you &mdash; ` +
           `tick another type, there ${spare === 1 ? "is" : "are"} ${spare} more.`,
     cls: "note warn",
   }
@@ -414,6 +609,7 @@ async function build() {
   $("recap-building").innerHTML =
     `<b>${cap}</b> <span>&middot;</span> <b>${n}</b> games <span>&middot;</span> ` +
     ($("rated").checked ? "rated only" : "rated and casual")
+  resetSteps()
   show("building", { top: true })
 
   state.abort = new AbortController()
@@ -425,23 +621,102 @@ async function build() {
       speeds: [...state.speeds],
       ratedOnly: $("rated").checked,
       includeBots: $("bots").checked,
+      // The same checkbox that governs lichess bot games governs these: after
+      // an upload it IS the control that replaced the button.
+      extraGames: $("bots").checked ? state.upload.games : [],
       maxGames: n,
       signal: state.abort.signal,
       engine,
     }, onProgress)
+    finishSteps()
     await finish(bot, accounts)
   } catch (err) {
     if (err && (err.name === "AbortError" || /abort/i.test(err.message || ""))) {
       show("setup", { top: true })
       return
     }
-    $("phase").textContent = "Could not build that bot: " + (err.message || err)
+    const li = stepAt >= 0 && $("step-" + STEPS[stepAt][0])
+    if (li) li.className = "step failed"
+    $("note").textContent = "Could not build that bot: " + (err.message || err)
     $("left").textContent = ""
   }
 }
 
+// The build in the order it actually happens. build.js reports one of these
+// phase names; the bar belongs to whichever is in flight, and everything above
+// it has a tick and stays on screen. A reader can see what is done, what is
+// running, and that there is more to come - which one relabelled bar could not
+// show. `finish` covers book and stats, which are one wait as far as anyone
+// watching is concerned.
+const STEPS = [
+  ["download", "Downloading your games"],
+  ["probe", "Measuring how far you see"],
+  ["score", "Scoring your moves"],
+  ["fit", "Fitting your style"],
+  ["finish", "Building your opening book"],
+]
+
+// -1 = nothing started. Phases only ever move forward, and one can be skipped
+// (probe does not run when an engine is handed in), so arriving at step N marks
+// every earlier step done rather than assuming N-1 was the last one seen.
+let stepAt = -1
+
+function resetSteps() {
+  stepAt = -1
+  $("steps").innerHTML = ""
+  $("note").textContent = ""
+  $("left").textContent = ""
+  $("fill").style.width = "0%"
+}
+
+function stepRow(i) {
+  const li = document.createElement("li")
+  li.className = "step running"
+  li.id = "step-" + STEPS[i][0]
+  li.innerHTML = '<span class="tick" aria-hidden="true"></span>' +
+    '<span class="what"></span><span class="detail"></span>'
+  li.querySelector(".what").textContent = STEPS[i][1]
+  return li
+}
+
+// build.js writes its labels as "Scoring your moves - game 5 of 309", so the
+// half after the dash is the live detail and the half before it is the step
+// name this row already shows. A label with no dash carries no detail.
+function detailOf(label) {
+  if (!label) return ""
+  const i = label.indexOf(" - ")
+  return i === -1 ? "" : label.slice(i + 3)
+}
+
+function enterStep(i) {
+  for (let k = Math.max(stepAt, 0); k < i; k++) {
+    const done = $("step-" + STEPS[k][0])
+    if (done) { done.className = "step done"; done.querySelector(".detail").textContent = "" }
+  }
+  for (let k = stepAt + 1; k <= i; k++) {
+    if (!$("step-" + STEPS[k][0])) $("steps").appendChild(stepRow(k))
+  }
+  stepAt = i
+}
+
+function finishSteps() {
+  for (let k = 0; k <= stepAt; k++) {
+    const li = $("step-" + STEPS[k][0])
+    if (li) { li.className = "step done"; li.querySelector(".detail").textContent = "" }
+  }
+  $("fill").style.width = "100%"
+  $("left").textContent = ""
+}
+
 function onProgress(p) {
-  if (p.label) $("phase").textContent = p.label
+  const i = STEPS.findIndex((s) => s[0] === p.phase)
+  // An unknown phase still deserves its label rather than being dropped.
+  if (i === -1) { if (p.label) $("note").textContent = p.label; return }
+  if (i > stepAt) enterStep(i)
+  if (i === stepAt) {
+    const li = $("step-" + p.phase)
+    if (li) li.querySelector(".detail").textContent = detailOf(p.label)
+  }
   if (p.total) {
     const pct = Math.max(0, Math.min(100, Math.round((p.done / p.total) * 100)))
     $("fill").style.width = pct + "%"
@@ -578,9 +853,10 @@ async function loadPromo() {
 /* ------------------------------------------------------------------ boot */
 
 async function boot() {
+  wireUpload()
   setTheme(false)
   let muted = false
-  try { muted = localStorage.getItem("mirror-sound") === "off" } catch (e) {}
+  try { muted = localStorage.getItem("build-a-bot-sound") === "off" } catch (e) {}
   setMuted(muted)
   wireCopyButtons()
   loadPromo()

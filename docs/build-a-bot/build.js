@@ -1,4 +1,4 @@
-// Mirror Bot: username -> bot, entirely in the browser.
+// Build-a-Bot: username -> bot, entirely in the browser.
 //
 // This file is ORCHESTRATION ONLY. Every piece of real arithmetic already
 // exists and is already verified:
@@ -40,7 +40,7 @@
 
 import { Chess } from "../vendor/chess.js"
 import { createEngine } from "./engine.js"
-import { fetchGames } from "./games.js"
+import { fetchGames, gameKey } from "./games.js"
 import {
   N_FEATURES, FEATURE_NAMES, makeContext, horizonScores, features,
 } from "./v9.js"
@@ -999,6 +999,7 @@ function normaliseOpts(opts) {
   if (!accounts.length) throw new BuildError("no accounts given", "NO_ACCOUNTS")
   return {
     accounts,
+    extraGames: Array.isArray(o.extraGames) ? o.extraGames : [],
     speeds: o.speeds && o.speeds.length ? o.speeds : ["rapid", "blitz"],
     ratedOnly: o.ratedOnly !== false,
     includeBots: !!o.includeBots,
@@ -1065,6 +1066,28 @@ export async function buildBot(opts, onProgress) {
         `Downloading your games - ${Math.min(done, o.maxGames)} of ${o.maxGames}`)
     },
   )
+  // Games the player uploaded as PGN. They are merged in rather than fetched
+  // because no API will ever hand them over: chess.com publishes no games
+  // against its own bots. Deduped by move list and side, so re-dropping a file
+  // that overlaps the archive cannot double-weight those games in the fit.
+  if (o.extraGames && o.extraGames.length) {
+    const seen = new Set(games.map(gameKey))
+    let added = 0
+    for (const g of o.extraGames) {
+      const k = gameKey(g)
+      if (seen.has(k)) continue
+      seen.add(k)
+      games.push(g)
+      added++
+    }
+    // newest-first is the order everything downstream assumes, and the uploads
+    // were appended, not merged in date order
+    if (added) games.sort((a, b) => (b.endTime || 0) - (a.endTime || 0))
+    if (games.length > o.maxGames) games.length = o.maxGames
+    report("download", Math.min(games.length, o.maxGames), o.maxGames,
+      `Downloading your games - ${games.length} of ${o.maxGames}`)
+  }
+
   const tDownload = nowMs() - t0
   if (!games.length) {
     throw new BuildError(
@@ -1121,11 +1144,17 @@ export async function buildBot(opts, onProgress) {
     levers.temp = o.temp
 
     // ---- 5. book ----
+    // Book and stats used to run silently. They are quick, but loadOpenings
+    // goes to the network, so a page that shows its steps would sit on a
+    // finished "Fitting your style" with nothing moving. One phase covers
+    // both: it is the last thing between here and a playable bot.
+    report("finish", 1, 3, "Building your opening book...")
     const openings = await loadOpenings(o.openingsUrl, o.signal)
     const book = buildBook(games, openings, o)
     levers.book = { minCount: book.minCount, maxPly: MAX_BOOK_PLY }
 
     // ---- 6 & 7. stats ----
+    report("finish", 2, 3, "Working out how you play...")
     const quality = policyQuality(scored, best.weights, o.temp)
     const rating = estimateRating({ acpl: quality.botAcpl, top1: quality.botTop1 })
 

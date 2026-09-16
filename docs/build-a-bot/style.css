@@ -1,4 +1,4 @@
-/* Mirror Bot. Burke Bot's visual language, verbatim - same tokens, same three
+/* Build-a-Bot. Burke Bot's visual language, verbatim - same tokens, same three
    faces, same card language - because this is a companion page and should feel
    like one. Everything is sized in rem so the whole page scales with the window
    from one root clamp.
@@ -359,7 +359,68 @@ body[data-route="shared"] footer{
 .recap b{color:var(--ink); font-weight:500}
 .bar{height:7px; border-radius:4px; background:var(--surface-2); overflow:hidden; margin:.9rem 0 .55rem}
 .bar span{display:block; height:100%; background:var(--accent); border-radius:4px; width:62%}
-.prog{display:flex; justify-content:space-between; font-size:.84rem; color:var(--ink-2); font-variant-numeric:tabular-nums}
+.prog{display:flex; justify-content:space-between; font-size:.84rem; color:var(--ink-2); font-variant-numeric:tabular-nums; min-height:1.3rem}
+
+/* The step list. It only ever grows: the step in flight is the last row, with
+   the bar above it, and finished steps keep their place with a tick. Nothing
+   is removed and nothing is relabelled, so the reader can see how far in they
+   are without having watched the whole time. */
+.steps{list-style:none; margin:.75rem 0 0; padding:0; display:flex; flex-direction:column; gap:.55rem}
+.step{display:flex; align-items:flex-start; gap:.6rem; font-size:.88rem; line-height:1.45}
+.step .tick{position:relative; flex:none; width:1.05rem; height:1.05rem; margin-top:.1rem}
+.step .what{color:var(--ink)}
+.step .detail{color:var(--ink-2); font-variant-numeric:tabular-nums}
+/* the detail follows the name on the same line where there is room, and drops
+   under it on a phone rather than squeezing the name */
+.step .detail:not(:empty)::before{content:"\00a0\00b7\00a0"}
+@media (max-width:430px){
+  .step{flex-wrap:wrap}
+  .step .detail{flex-basis:100%; margin-left:1.65rem}
+  .step .detail:not(:empty)::before{content:none}
+}
+
+/* in flight: a ring with one accent edge, spinning where motion is allowed.
+   The global reduced-motion rule stops the spin; the accent edge still reads
+   as "this one is going" against the plain ticks above it. */
+.step.running .tick::after{
+  content:""; position:absolute; inset:.06rem;
+  border:2px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:step-spin .8s linear infinite;
+}
+@keyframes step-spin{to{transform:rotate(360deg)}}
+
+/* done: the name recedes and the tick carries the state */
+.step.done .what{color:var(--ink-2)}
+.step.done .tick::after{
+  content:""; position:absolute; left:.36rem; top:.1rem;
+  width:.26rem; height:.58rem;
+  border:solid var(--accent); border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+}
+
+.step.failed .tick::after{
+  content:"\00d7"; position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--warn); font-size:1.1rem; line-height:1;
+}
+.step.failed .what{color:var(--warn)}
+
+/* the PGN drop zone. A dashed box reads as "put something here" without
+   needing a label to say so, and the whole box is the target - a button-sized
+   hit area would make dragging a file harder than clicking one. */
+.drop{
+  margin-top:1rem; padding:1rem .9rem;
+  border:1px dashed var(--border); border-radius:10px;
+  background:var(--bg); text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:.7rem;
+  transition:border-color .15s, background .15s;
+}
+.drop.over{border-color:var(--accent); border-style:solid; background:var(--surface-2)}
+/* a dragged file must not land on a child and cancel the parent's dragleave */
+.drop.over *{pointer-events:none}
+.drop-line{margin:0; font-size:.84rem; color:var(--ink-2); line-height:1.5; max-width:30rem}
+.drop .btn{font-size:.9rem; padding:.45rem .95rem}
+.drop .note{margin:0}
 
 /* result */
 .stats{
@@ -429,7 +490,7 @@ footer a{color:var(--accent); text-decoration:none}
 /* ---- pieces the live page needs that the mockup did not ---- */
 
 /* Boot veil: hold the page until fonts and the board have settled so it fades
-   in as one unit instead of reflowing in front of the reader. mirror.js lifts
+   in as one unit instead of reflowing in front of the reader. build-a-bot.js lifts
    it; index.html carries a 3s fallback so it can never stick. */
 html.booting body{opacity:0}
 body{transition:opacity .18s ease}

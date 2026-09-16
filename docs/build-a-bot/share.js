@@ -1,4 +1,4 @@
-// Mirror Bot — packing a whole bot into a URL fragment.
+// Build-a-Bot — packing a whole bot into a URL fragment.
 //
 // A shared bot is a link and nothing else. No server, no storage, no download.
 // The payload rides in the fragment (after the #), which browsers never put on
@@ -678,7 +678,7 @@ function parse(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const version = bytes[0]
   if (version !== FORMAT_VERSION) {
-    throw new ShareError("link was made by a different version of Mirror Bot", "BAD_VERSION")
+    throw new ShareError("link was made by a different version of Build-a-Bot", "BAD_VERSION")
   }
   const flags = bytes[1]
   const scale = view.getUint16(2, true)

@@ -1,4 +1,4 @@
-// Mirror Bot: the conditional-logit fit, in the browser.
+// Build-a-Bot: the conditional-logit fit, in the browser.
 //
 // This is a port of pipeline/train_v9.py - the same loss, the same pure
 // L-BFGS with Armijo backtracking, the same scale-for-the-optimiser /

@@ -1,4 +1,4 @@
-// Mirror Bot — games.js
+// Build-a-Bot — games.js
 // Downloads a stranger's games from chess.com and lichess, straight from the
 // browser, and hands back one normalised shape the rest of the page can fit on.
 //
@@ -643,6 +643,28 @@ function openingFromChesscom(raw) {
 async function* chesscomGames(username, budget, opts, report) {
   const enc = encodeURIComponent(username)
   const lowerUser = username.toLowerCase()
+
+  // If the counts were made exact by a full scan, every game is already here,
+  // normalised, newest first. Re-downloading the same months to re-parse the
+  // same PGN would be the slowest possible way to get an identical answer.
+  const scan = archiveScans.get(lowerUser)
+  if (scan) {
+    report({ phase: "archives", done: scan.months, total: scan.months, site: "chesscom", username })
+    let kept = 0
+    for (const g of scan.games) {
+      if (!opts.speeds.includes(g.speed)) continue
+      if (opts.ratedOnly && !g.rated) continue
+      kept++
+      yield g
+      if (kept >= budget) return
+      if (kept % 25 === 0) {
+        report({ phase: "download", done: kept, total: budget, site: "chesscom", username, scanned: scan.months, of: scan.months })
+      }
+    }
+    report({ phase: "download", done: kept, total: budget, site: "chesscom", username, scanned: scan.months, of: scan.months })
+    return
+  }
+
   const index = await getJson("chesscom", `${API.chesscom}/pub/player/${enc}/games/archives`, { signal: opts.signal })
   const archives = Array.isArray(index.archives) ? index.archives.slice().reverse() : []
   report({ phase: "archives", done: 0, total: archives.length, site: "chesscom", username })
@@ -652,7 +674,7 @@ async function* chesscomGames(username, budget, opts, report) {
     throwIfAborted(opts.signal)
     let month
     try {
-      month = await getJson("chesscom", archives[i], { signal: opts.signal })
+      month = await getMonth(archives[i], opts.signal)
     } catch (err) {
       if (isAbort(err, opts.signal)) throw abortError()
       // One bad month must not kill a ten-year pull.
@@ -669,6 +691,106 @@ async function* chesscomGames(username, budget, opts, report) {
     }
     report({ phase: "download", done: kept, total: budget, site: "chesscom", username, scanned: i + 1, of: archives.length })
   }
+}
+
+// ---------------------------------------------------------------------------
+// the full chess.com archive scan
+// ---------------------------------------------------------------------------
+
+/**
+ * Why this exists.
+ *
+ * chess.com's /stats endpoint publishes RATED LADDER RECORDS ONLY. It is one
+ * request and it answers instantly, which is why the first look uses it - but
+ * it cannot see a casual game. burkeley reads 307 rapid / 2 daily there while
+ * the archive actually holds 331 games: 22 of them casual, including the only
+ * blitz and the only bullet game on the account, which /stats does not even
+ * give a key for.
+ *
+ * The only place casual games exist is the monthly archives, and the only way
+ * to count them is to read every month. That is one request per month of
+ * history - ten for burkeley - with no artificial delay between them, because
+ * the per-site cooldown here only fires on a 429.
+ *
+ * So the scan pays for itself twice: the counts become exact, and because it
+ * normalises and keeps what it reads, the build afterwards serves its download
+ * from this cache instead of asking chess.com for the same months again.
+ */
+
+// username -> { games (newest first), counts, ratedCounts, total }
+const archiveScans = new Map()
+
+// Raw month payloads, shared by the scan and the download so neither refetches
+// what the other already has. Capped: a twenty-year account is a lot of PGN to
+// hold, and the cache is a speed-up, never a correctness requirement.
+const monthCache = new Map()
+const MAX_CACHED_MONTHS = 300
+
+async function getMonth(url, signal) {
+  const hit = monthCache.get(url)
+  if (hit) return hit
+  const month = await getJson("chesscom", url, { signal })
+  if (monthCache.size >= MAX_CACHED_MONTHS) monthCache.delete(monthCache.keys().next().value)
+  monthCache.set(url, month)
+  return month
+}
+
+export function getArchiveScan(username) {
+  return archiveScans.get(String(username || "").toLowerCase()) || null
+}
+
+/**
+ * Read every month of a chess.com account and count what is actually there.
+ *
+ * Counts only games this app could really learn from - standard chess from the
+ * standard position, long enough to be worth fitting - so the number on screen
+ * is the number of games that would be used, not a headline that shrinks the
+ * moment a build starts. Rated and casual are counted separately so the split
+ * can be shown.
+ *
+ * onProgress ({done, total, counts, found}) fires per month, so a long account
+ * can show its numbers climbing instead of sitting still.
+ */
+export async function scanChesscomArchive(username, opts = {}, onProgress) {
+  const lower = String(username || "").toLowerCase()
+  const cached = archiveScans.get(lower)
+  if (cached) return cached
+
+  const enc = encodeURIComponent(username)
+  const index = await getJson("chesscom", `${API.chesscom}/pub/player/${enc}/games/archives`, { signal: opts.signal })
+  const archives = Array.isArray(index.archives) ? index.archives.slice().reverse() : []
+
+  const games = []
+  const counts = blankCounts()
+  const ratedCounts = blankCounts()
+  // every speed and both rated and casual: the caller filters, the scan counts
+  const wide = { speeds: SPEEDS, ratedOnly: false, includeBots: true }
+
+  for (let i = 0; i < archives.length; i++) {
+    throwIfAborted(opts.signal)
+    let month
+    try {
+      month = await getMonth(archives[i], opts.signal)
+    } catch (err) {
+      if (isAbort(err, opts.signal)) throw abortError()
+      continue   // one unreadable month must not sink the count
+    }
+    for (const raw of Array.isArray(month.games) ? month.games : []) {
+      const g = normaliseChesscom(raw, lower, wide)
+      if (!g) continue
+      games.push(g)
+      counts[g.speed] = (counts[g.speed] || 0) + 1
+      if (g.rated) ratedCounts[g.speed] = (ratedCounts[g.speed] || 0) + 1
+    }
+    if (onProgress) {
+      onProgress({ done: i + 1, total: archives.length, counts: { ...counts }, found: games.length })
+    }
+  }
+
+  games.sort((a, b) => (b.endTime || 0) - (a.endTime || 0))
+  const out = { games, counts, ratedCounts, total: games.length, months: archives.length }
+  archiveScans.set(lower, out)
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -839,6 +961,167 @@ async function* lichessGames(username, budget, opts, report) {
 }
 
 // ---------------------------------------------------------------------------
+// uploaded PGN
+// ---------------------------------------------------------------------------
+
+/**
+ * chess.com's public API does not publish games against its own bots - the
+ * monthly archives contain member games only, which is why the bots toggle is
+ * lichess-only. A file the player exports themselves is the only route for
+ * those, and it doubles as a way in for anything else that never reaches an
+ * API: OTB games, another site, a study.
+ *
+ * Deliberately NOT a strict PGN parser. chess.js validates every move in
+ * replayToUci, so anything mis-split here is dropped there rather than
+ * smuggled into the fit.
+ */
+
+const PGN_TAG = /\[(\w+)\s+"([^"]*)"\]/g
+
+function pgnTags(chunk) {
+  const tags = {}
+  PGN_TAG.lastIndex = 0
+  let m
+  while ((m = PGN_TAG.exec(chunk))) tags[m[1]] = m[2]
+  return tags
+}
+
+/**
+ * A downloaded archive is many games concatenated. Each one starts at a line
+ * beginning "[Event ", which is the one tag the PGN spec makes mandatory and
+ * first, so it is the only split point that does not need a real parser.
+ */
+function splitPgn(text) {
+  const body = String(text ?? "").replace(/^﻿/, "")
+  return body
+    .split(/\r?\n(?=\[Event\s)/)
+    .map((c) => c.trim())
+    .filter((c) => c && /\[Event\s/.test(c))
+}
+
+/**
+ * PGN carries a TimeControl but no time class, so the class is derived the way
+ * both sites derive it: base plus 40 increments, which is the budget for a
+ * 40-move game. "1/N" is correspondence. "-" and anything unparseable has no
+ * class at all and is dropped rather than guessed into a bucket it would then
+ * be weighted inside.
+ */
+function speedFromTimeControl(tc) {
+  const s = String(tc ?? "").trim()
+  if (!s || s === "-" || s === "?") return null
+  if (/^1\/\d+$/.test(s)) return "daily"
+  const live = /^(\d+)(?:\+(\d+))?$/.exec(s)
+  if (!live) return null
+  const est = Number(live[1]) + 40 * Number(live[2] || 0)
+  if (est < 180) return "bullet"
+  if (est < 600) return "blitz"
+  if (est < 1800) return "rapid"
+  return "classical"
+}
+
+function pgnEndTime(tags) {
+  const d = tags.UTCDate || tags.EndDate || tags.Date || ""
+  const t = tags.UTCTime || tags.EndTime || "00:00:00"
+  const dm = /^(\d{4})[.\-/](\d{2})[.\-/](\d{2})$/.exec(d.trim())
+  if (!dm) return 0
+  const tm = /^(\d{2}):(\d{2})(?::(\d{2}))?/.exec(t.trim())
+  const ms = Date.UTC(
+    +dm[1], +dm[2] - 1, +dm[3],
+    tm ? +tm[1] : 0, tm ? +tm[2] : 0, tm && tm[3] ? +tm[3] : 0,
+  )
+  return Number.isFinite(ms) ? ms : 0
+}
+
+function pgnResult(res, color) {
+  if (res === "1/2-1/2") return "draw"
+  if (res === "1-0") return color === "w" ? "win" : "loss"
+  if (res === "0-1") return color === "b" ? "win" : "loss"
+  return null
+}
+
+function pgnOpening(tags) {
+  const eco = tags.ECO || null
+  const slug = (tags.ECOUrl || "").split("/openings/")[1] || null
+  if (!eco && !slug) return null
+  return { eco, name: slug ? slug.replace(/-/g, " ").replace(/\s+/g, " ").trim() : null, ply: null }
+}
+
+/** A game is the same game wherever it came from: its moves and its side. */
+export function gameKey(g) {
+  return g.color + "|" + g.moves.join("")
+}
+
+/**
+ * Parse an exported PGN into the same shape fetchGames returns.
+ *
+ * opts: { usernames: [string], speeds }
+ *
+ * The rated filter is deliberately NOT applied. Games against bots are unrated
+ * by definition, so running the checkbox over a file the player hand-picked
+ * would throw away precisely what the upload exists to add. The speed filter IS
+ * applied, because the per-speed choices above it are an explicit instruction
+ * and the weighting downstream depends on them.
+ */
+export function parsePgn(text, opts = {}) {
+  const names = (opts.usernames || []).map((u) => String(u || "").toLowerCase()).filter(Boolean)
+  const speeds = opts.speeds && opts.speeds.length ? opts.speeds : SPEEDS
+  const games = []
+  const skipped = { notYours: 0, speed: 0, variant: 0, tooShort: 0, unreadable: 0 }
+  let read = 0
+
+  for (const chunk of splitPgn(text)) {
+    read++
+    const tags = pgnTags(chunk)
+
+    // Only the standard game from the standard position. SetUp/FEN means an
+    // arranged start, and Variant means it is not this game at all.
+    if (tags.Variant && !/^standard$/i.test(tags.Variant)) { skipped.variant++; continue }
+    if (tags.FEN && tags.FEN.trim() !== START_FEN) { skipped.variant++; continue }
+
+    const white = String(tags.White || "").toLowerCase()
+    const black = String(tags.Black || "").toLowerCase()
+    const color = names.includes(white) ? "w" : names.includes(black) ? "b" : null
+    if (!color) { skipped.notYours++; continue }
+
+    const speed = speedFromTimeControl(tags.TimeControl)
+    if (!speed || !speeds.includes(speed)) { skipped.speed++; continue }
+
+    const { sans, clocks } = readMovetext(chunk)
+    const moves = replayToUci(sans)
+    if (!moves) { skipped.unreadable++; continue }
+    if (!longEnough(moves, color)) { skipped.tooShort++; continue }
+
+    const tc = parseTimeControl(tags.TimeControl)
+    const mine = color === "w" ? "White" : "Black"
+    const theirs = color === "w" ? "Black" : "White"
+    const elo = (side) => {
+      const n = Number(tags[side + "Elo"])
+      return Number.isFinite(n) && n > 0 ? n : null
+    }
+
+    games.push({
+      site: "upload",
+      id: "pgn:" + gameKey({ color, moves }),
+      moves,
+      color,
+      speed,
+      rated: /rated/i.test(tags.Event || ""),
+      endTime: pgnEndTime(tags),
+      clocks: chesscomSpent(clocks.slice(0, moves.length), tc, null),
+      opening: pgnOpening(tags),
+      url: tags.Link || tags.Site || null,
+      timeControl: tags.TimeControl || null,
+      result: pgnResult(tags.Result, color),
+      opponent: tags[theirs] || null,
+      myRating: elo(mine),
+      opponentRating: elo(theirs),
+    })
+  }
+
+  return { games, read, kept: games.length, skipped }
+}
+
+// ---------------------------------------------------------------------------
 // fetchGames
 // ---------------------------------------------------------------------------
 
@@ -863,7 +1146,10 @@ export async function fetchGames(opts = {}, onProgress) {
   const max = Math.max(0, Math.floor(opts.max ?? 400))
   const settings = {
     speeds,
-    ratedOnly: opts.ratedOnly !== false,
+    // Default OFF: casual games are still that person's moves, and for a lot of
+    // accounts they are a large slice of the record. Opting IN to the narrower
+    // set is the honest default; opting out of it silently was not.
+    ratedOnly: opts.ratedOnly === true,
     includeBots: !!opts.includeBots,
     signal: opts.signal,
   }

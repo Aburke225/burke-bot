@@ -190,7 +190,7 @@ body {
    Nothing wraps at any width a person is likely to use - see the two narrow
    bands noted below. */
 .controls .btn { white-space: nowrap; }
-/* The Mirror Bot entry point. It navigates, so it is an anchor rather than a
+/* The Build-a-Bot entry point. It navigates, so it is an anchor rather than a
    button, which means it needs the box .btn otherwise gets for free. */
 #build-btn { display: inline-flex; align-items: center; text-decoration: none; }
 .btn {

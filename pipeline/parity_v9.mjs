@@ -7,7 +7,7 @@
 // metrics catching it - so this runs the REAL source out of app.js rather than
 // a copy, extracted by brace-matching.
 //
-// THERE IS NOW A THIRD COPY: docs/mirror/v9.js, the module the Mirror Bot page
+// THERE IS NOW A THIRD COPY: docs/build-a-bot/v9.js, the module the Build-a-Bot page
 // uses to build a bot from a stranger's games. It is checked here against the
 // same python-generated vectors, so one run proves all three agree. If it is
 // absent the check is skipped and the original two-way guarantee is unchanged -
@@ -55,23 +55,23 @@ const api = new Function("chess", src)(chess)
 
 // The third copy is a real ES module with explicit exports, so it imports
 // rather than needing the brace-extraction above.
-let mirror = null
+let bab = null
 try {
-  mirror = await import("../docs/mirror/v9.js")
+  bab = await import("../docs/build-a-bot/v9.js")
 } catch (e) {
   if (e.code !== "ERR_MODULE_NOT_FOUND") throw e
 }
 
-// docs/mirror/v9.js takes the previous-move facts explicitly instead of digging
+// docs/build-a-bot/v9.js takes the previous-move facts explicitly instead of digging
 // them out of module state the way app.js does. Passing nulls when history DOES
 // exist silently changes features 12, 13, 40, 43 and 44 and raises no error, so
 // this mapping is the load-bearing part of the third-copy check.
-function mirrorContext() {
+function babContext() {
   const hist = chess.history({ verbose: true })
   const oppLast = hist.length ? hist[hist.length - 1] : null
   const myLast = hist.length > 1 ? hist[hist.length - 2] : null
   const mine = myLast && myLast.color === chess.turn() ? myLast : null
-  return mirror.makeContext(
+  return bab.makeContext(
     chess,
     mine ? mine.to : null,
     mine ? mine.from : null,
@@ -103,7 +103,7 @@ for (const c of cases) {
       }
     }
     ctx = api.decisionContextV9()
-    if (mirror) mctx = mirrorContext()
+    if (bab) mctx = babContext()
     lastKey = key
   }
   const x = api.moveFeaturesV9(c.uci, ctx, c.sh, c.bestSh, c.rank)
@@ -116,12 +116,12 @@ for (const c of cases) {
       mismatch = true
     }
   }
-  if (mirror) {
-    const mx = mirror.features(chess, c.uci, mctx, c.sh, c.bestSh, c.rank)
+  if (bab) {
+    const mx = bab.features(chess, c.uci, mctx, c.sh, c.bestSh, c.rank)
     mChecked++
     if (!mx) {
       mBad++
-      console.log("MIRROR NULL vector for", c.uci)
+      console.log("BUILD-A-BOT NULL vector for", c.uci)
     } else {
       let mm = false
       for (let k = 0; k < api.V9_N; k++) {
@@ -132,9 +132,9 @@ for (const c of cases) {
         if (mBad <= 3) {
           const d = []
           for (let k = 0; k < api.V9_N; k++) {
-            if (Math.abs(mx[k] - c.x[k]) > 1e-6) d.push(`${k}: mirror ${mx[k]} vs py ${c.x[k]}`)
+            if (Math.abs(mx[k] - c.x[k]) > 1e-6) d.push(`${k}: bab ${mx[k]} vs py ${c.x[k]}`)
           }
-          console.log(`MIRROR MISMATCH ${c.uci} in ${c.fen || c.moves.length + " plies"} -> ${d.join(", ")}`)
+          console.log(`BUILD-A-BOT MISMATCH ${c.uci} in ${c.fen || c.moves.length + " plies"} -> ${d.join(", ")}`)
         }
       }
     }
@@ -158,13 +158,13 @@ if (offenders.length) {
   console.log("every feature agrees to 1e-6")
 }
 
-if (!mirror) {
-  console.log("docs/mirror/v9.js absent - third copy not checked")
+if (!bab) {
+  console.log("docs/build-a-bot/v9.js absent - third copy not checked")
 } else {
-  console.log(`\ndocs/mirror/v9.js: ${mChecked} vectors checked, ${mBad} mismatching`)
+  console.log(`\ndocs/build-a-bot/v9.js: ${mChecked} vectors checked, ${mBad} mismatching`)
   const mo = mPerFeature.map((n, k) => [k, n]).filter(([, n]) => n > 0)
   if (mo.length) {
-    console.log("mirror mismatches by feature:", mo.map(([k, n]) => `${k}:${n}`).join("  "))
+    console.log("build-a-bot mismatches by feature:", mo.map(([k, n]) => `${k}:${n}`).join("  "))
   } else {
     console.log("the third copy agrees with python to 1e-6")
   }
