@@ -354,24 +354,26 @@ function pieceGlyph(colour, type) {
          '<use href="#' + colour + type + '"/></svg>'
 }
 
-// Signed in, the pawn is promoted. Same head, same collar, same body and base
-// as the Pawnling - so it reads as the SAME character rather than a different
-// one - with a queen's coronet on top. Its viewBox drops 1.06 further than the
-// Pawnling's because the crown adds ink above the head: the geometry stays put
-// and the window moves, which keeps the drawing centred in its box without
-// nudging any coordinate.
+// Signed in, the pawn is promoted AND cloaked: the True Queen's coronet over
+// the Caped option's cape. The coronet is raised 0.7 units from where it sat in
+// the option sheet so more of it clears the skull - it is drawn BEFORE the head,
+// so the head covers its lower half and only the part above the crown line
+// shows. The cape takes the board's lighter green rather than the figure's
+// cream: a cream cape behind a cream body merged into one blob at 44px, and a
+// hairline between them was not enough.
 const BURKE_AVATAR = [
-  '<svg viewBox="-1.04 -2.25 26.09 26.09" aria-hidden="true">',
+  '<svg viewBox="-2.2 -2.76 28.4 28.4" aria-hidden="true">',
+  '<path d="M9.7 10.8C6.1 12.7 3.4 16.7 2.4 21.5h19.2c-1-4.8-3.7-8.8-7.3-10.7z" fill="#8fc57f"/>',
   '<g fill="#e9ecd6">',
-  '<path d="M8.4 4.4 9.6 1.3 10.9 3.9 12 .7 13.1 3.9 14.4 1.3 15.6 4.4Z"/>',
-  '<circle cx="9.6" cy="1.3" r=".8"/><circle cx="12" cy=".7" r=".8"/><circle cx="14.4" cy="1.3" r=".8"/>',
-  '<circle cx="12" cy="6.4" r="4.2"/>',
-  '<path d="M8.5 11.5h7l-.8 2H9.3z"/>',
-  '<path d="M9.4 13.3C9.4 16.3 8 18.1 6.4 19.3H17.6C16 18.1 14.6 16.3 14.6 13.3Z"/>',
-  '<path d="M5.4 19.1h13.2a1.1 1.1 0 0 1 1.1 1.1v1.5H4.3v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
+  '<path d="M7.2 6.5 7.9 2.7 9.9 4.7 12 1.9 14.1 4.7 16.1 2.7 16.8 6.5Z"/>',
+  '<circle cx="7.9" cy="2.7" r=".82"/><circle cx="12" cy="1.9" r=".82"/><circle cx="16.1" cy="2.7" r=".82"/>',
+  '<circle cx="12" cy="8.1" r="3.8"/>',
+  '<path d="M8.5 11.6h7l-.8 2H9.3z"/>',
+  '<path d="M9.4 13.4C9.4 16.4 8 18.2 6.4 19.4H17.6C16 18.2 14.6 16.4 14.6 13.4Z"/>',
+  '<path d="M5.4 19.2h13.2a1.1 1.1 0 0 1 1.1 1.1v1.5H4.3v-1.5a1.1 1.1 0 0 1 1.1-1.1z"/>',
   '</g>',
-  '<g fill="#527a4b"><circle cx="10.15" cy="5.3" r=".85"/><circle cx="13.85" cy="5.3" r=".85"/></g>',
-  '<path d="M10.4 7.8Q12 9.1 13.6 7.8" fill="none" stroke="#527a4b" ' +
+  '<g fill="#527a4b"><circle cx="10.15" cy="7" r=".85"/><circle cx="13.85" cy="7" r=".85"/></g>',
+  '<path d="M10.4 9.5Q12 10.8 13.6 9.5" fill="none" stroke="#527a4b" ' +
     'stroke-width="1.25" stroke-linecap="round"/>',
   '</svg>',
 ].join("")
