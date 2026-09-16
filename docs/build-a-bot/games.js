@@ -571,16 +571,21 @@ function longEnough(moves, color) {
 // ---------------------------------------------------------------------------
 
 function normaliseChesscom(raw, lowerUser, opts) {
+  // opts.tally, when given, records WHY a game was dropped. The scan needs it:
+  // "294 rapid" invites the question "but I have 307" and the only honest
+  // answer is a count of the ones that were too short to learn from.
+  const drop = (why) => { if (opts.tally) opts.tally[why] = (opts.tally[why] || 0) + 1; return null }
+
   // ALLOW-list, not a deny-list. The documented rules enum is incomplete —
   // 'oddschess' turns up in live data and is not in it — so anything that is
   // not the single word we want is gone.
-  if (raw.rules !== "chess") return null
+  if (raw.rules !== "chess") return drop("variant")
 
   const speed = raw.time_class
-  if (!opts.speeds.includes(speed)) return null
-  if (opts.ratedOnly && !raw.rated) return null
-  if (raw.initial_setup && raw.initial_setup !== START_FEN) return null
-  if (typeof raw.pgn !== "string" || !raw.pgn) return null
+  if (!opts.speeds.includes(speed)) return drop("speed")
+  if (opts.ratedOnly && !raw.rated) return drop("casual")
+  if (raw.initial_setup && raw.initial_setup !== START_FEN) return drop("variant")
+  if (typeof raw.pgn !== "string" || !raw.pgn) return drop("unreadable")
 
   // Case-insensitive, always. Mixed-case display names are the majority, and
   // an exact-match comparison here fails silently: every game of theirs looks
@@ -588,11 +593,12 @@ function normaliseChesscom(raw, lowerUser, opts) {
   const white = String(raw.white?.username || "").toLowerCase()
   const black = String(raw.black?.username || "").toLowerCase()
   const color = white === lowerUser ? "w" : black === lowerUser ? "b" : null
-  if (!color) return null
+  if (!color) return drop("notYours")
 
   const { sans, clocks } = readMovetext(raw.pgn)
   const moves = replayToUci(sans)
-  if (!moves || !longEnough(moves, color)) return null
+  if (!moves) return drop("unreadable")
+  if (!longEnough(moves, color)) return drop("tooShort")
 
   const tc = parseTimeControl(raw.time_control)
   const duration = raw.start_time && raw.end_time ? raw.end_time - raw.start_time : null
@@ -764,7 +770,8 @@ export async function scanChesscomArchive(username, opts = {}, onProgress) {
   const counts = blankCounts()
   const ratedCounts = blankCounts()
   // every speed and both rated and casual: the caller filters, the scan counts
-  const wide = { speeds: SPEEDS, ratedOnly: false, includeBots: true }
+  const tally = { variant: 0, speed: 0, casual: 0, unreadable: 0, notYours: 0, tooShort: 0 }
+  const wide = { speeds: SPEEDS, ratedOnly: false, includeBots: true, tally }
 
   for (let i = 0; i < archives.length; i++) {
     throwIfAborted(opts.signal)
@@ -788,7 +795,11 @@ export async function scanChesscomArchive(username, opts = {}, onProgress) {
   }
 
   games.sort((a, b) => (b.endTime || 0) - (a.endTime || 0))
-  const out = { games, counts, ratedCounts, total: games.length, months: archives.length }
+  const out = {
+    games, counts, ratedCounts, total: games.length,
+    months: archives.length,
+    tooShort: tally.tooShort, tally,
+  }
   archiveScans.set(lower, out)
   return out
 }
@@ -1066,7 +1077,7 @@ export function parsePgn(text, opts = {}) {
   const names = (opts.usernames || []).map((u) => String(u || "").toLowerCase()).filter(Boolean)
   const speeds = opts.speeds && opts.speeds.length ? opts.speeds : SPEEDS
   const games = []
-  const skipped = { notYours: 0, speed: 0, variant: 0, tooShort: 0, unreadable: 0 }
+  const skipped = { notYours: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 }
   let read = 0
 
   for (const chunk of splitPgn(text)) {
@@ -1083,8 +1094,22 @@ export function parsePgn(text, opts = {}) {
     const color = names.includes(white) ? "w" : names.includes(black) ? "b" : null
     if (!color) { skipped.notYours++; continue }
 
-    const speed = speedFromTimeControl(tags.TimeControl)
-    if (!speed || !speeds.includes(speed)) { skipped.speed++; continue }
+    // Two very different reasons to have no usable time class, and lumping them
+    // together made the one that matters unreadable: a chess.com game against a
+    // bot is normally UNTIMED, so its TimeControl is "-" or absent, and every
+    // one of them was being reported as "outside the game types above" - a
+    // filter the player could not have fixed, because an untimed game is in no
+    // time class for them to tick. A game the player went and exported is an
+    // explicit choice, so an untimed one comes in regardless; only a game whose
+    // class they actually unticked is skipped.
+    let speed = speedFromTimeControl(tags.TimeControl)
+    if (!speed) {
+      speed = "daily"          // untimed is correspondence in everything but name
+      skipped.untimed++        // counted so the message can say so, not dropped
+    } else if (!speeds.includes(speed)) {
+      skipped.speed++
+      continue
+    }
 
     const { sans, clocks } = readMovetext(chunk)
     const moves = replayToUci(sans)

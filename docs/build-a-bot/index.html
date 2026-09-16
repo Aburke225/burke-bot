@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <div class="wrap">
@@ -115,11 +115,11 @@
         <h2>Reading your games</h2>
         <p class="sub">Do not close this tab, but feel free to browse others.</p>
         <div class="bar"><span id="fill" style="width:0%"></span></div>
-        <div class="prog"><span id="note"></span><span id="left"></span></div>
+        <div class="prog"><span id="note"></span></div>
         <!-- Steps accumulate here: the one in flight sits at the bottom with
              the bar above it, and finished ones stay put with a tick. -->
         <ol class="steps" id="steps"></ol>
-        <div class="actions" style="margin-top:1.1rem; justify-content:flex-start">
+        <div class="build-actions">
           <button class="btn" type="button" id="cancel">Cancel</button>
         </div>
       </div>
@@ -234,6 +234,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=5"></script>
+  <script type="module" src="build-a-bot.js?v=7"></script>
 </body>
 </html>

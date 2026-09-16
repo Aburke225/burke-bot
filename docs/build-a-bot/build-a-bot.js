@@ -40,7 +40,9 @@ const state = {
   // PGN the player dropped in: chess.com bot games, or anything else no API
   // will hand over. Parsed on arrival, merged at build time.
   scan: null,          // exact chess.com counts, once the archive has been read
-  upload: { games: [], read: 0, skipped: { notYours: 0, speed: 0, variant: 0, tooShort: 0, unreadable: 0 } },
+  allCounts: null,     // speed -> every game
+  ratedCounts: null,   // speed -> the rated ones only
+  upload: { games: [], read: 0, skipped: { notYours: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 } },
 }
 
 /* ---------------------------------------------------------------- routing */
@@ -250,7 +252,7 @@ async function startArchiveScan() {
 
 function applyScan(scan) {
   state.scan = scan
-  const casual = scan.total - SPEEDS_ALL.reduce((a, s) => a + (scan.ratedCounts[s] || 0), 0)
+  const casual = scan.total - SPEEDS_ALL.reduce((a, sp) => a + (scan.ratedCounts[sp] || 0), 0)
   renderSpeeds()
   const note = $("speeds-msg")
   // Two things changed at once and both need saying, because one of these
@@ -260,65 +262,118 @@ function applyScan(scan) {
   // too short to learn from drop out (a 6-move resignation counts on a ladder
   // but teaches nothing). What is left is the number of games that will
   // actually be used, which is the only number worth putting on a slider.
+  const short = scan.tooShort || 0
   note.innerHTML =
     (casual > 0
-      ? `Read from your whole archive, casual games included &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual, which chess.com's profile totals leave out. `
-      : "Read from your whole archive. ") +
-    "Games too short to learn from are already taken out, so this is what the bot actually gets."
+      ? `Read from your whole archive, casual games included &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual.`
+      : "Read from your whole archive.") +
+    (short
+      ? ` <b>${short.toLocaleString("en-US")}</b> game${short === 1 ? " was" : "s were"} too short to learn from.`
+      : "")
   note.hidden = false
   updateSlider()
 }
 
 const SPEEDS_ALL = ["bullet", "blitz", "rapid", "classical", "daily"]
 
-function renderSpeeds() {
-  // Pool the counts across whichever accounts were given, and show only the
-  // speeds the player has actually played. A row reading "0" is noise.
-  const counts = {}
+// Two sets of counts, not one: every game, and only the rated ones. The rated
+// checkbox swaps which set is on screen, so ticking it shows the player exactly
+// what it costs them instead of silently shrinking the build later.
+function poolCounts(which) {
+  const out = {}
   for (const [site, p] of Object.entries(state.profiles)) {
-    // For chess.com, an exact archive scan replaces the profile's rated-only
+    // For chess.com an exact archive scan replaces the profile's rated-only
     // ladder totals outright rather than adding to them - the two count the
     // same games, and the scan is the one that can see a casual game.
-    const src = site === "chesscom" && state.scan ? state.scan.counts : (p.counts || {})
-    for (const [sp, n] of Object.entries(src)) {
-      if (n > 0) counts[sp] = (counts[sp] || 0) + n
+    let src
+    if (site === "chesscom" && state.scan) {
+      src = which === "rated" ? state.scan.ratedCounts : state.scan.counts
+    } else {
+      // lichess publishes no rated/casual split we can get cheaply, so its
+      // counts stand for both. Claiming a split we cannot see would be worse
+      // than not narrowing them.
+      src = p.counts || {}
+    }
+    for (const [sp, n] of Object.entries(src || {})) {
+      if (n > 0) out[sp] = (out[sp] || 0) + n
     }
   }
-  state.counts = counts
+  return out
+}
+
+function renderSpeeds() {
+  // Rows exist for every speed the player has EVER played, so a row can read 0
+  // under "rated only" rather than vanishing - a row that disappears looks like
+  // a bug, and the player still needs its checkbox to get the games back.
+  state.allCounts = poolCounts("all")
+  state.ratedCounts = poolCounts("rated")
 
   const box = $("speeds")
   box.innerHTML = ""
   state.speeds = new Set()
   for (const sp of SPEED_ORDER) {
-    const n = counts[sp]
-    if (!n) continue
+    if (!state.allCounts[sp]) continue
     state.speeds.add(sp)            // present means on, per the agreed rule
     const lab = document.createElement("label")
     lab.className = "speed"
+    lab.dataset.for = sp
     lab.innerHTML =
       `<input type="checkbox" data-speed="${sp}" checked>` +
       `<span class="nm">${SPEED_LABEL[sp] || sp}</span>` +
-      `<span class="ct">${n.toLocaleString("en-US")}</span>`
+      `<span class="ct"></span>`
     box.appendChild(lab)
   }
-  box.addEventListener("change", onSpeedChange, { once: true })
+  box.addEventListener("change", onSpeedChange)
 
-  // the bots control is lichess-only: chess.com's public API has no computer
-  // games at all, so offering it there would describe a filter that does nothing
   showBotControls()
-
-  // These counts come from each site's profile, and chess.com's only publishes
-  // RATED ladder records - burkeley reads 307 rapid / 2 daily there while the
-  // game archive actually holds 331. So with casual games included the numbers
-  // below are a floor, not a total. Saying so beats letting someone conclude
-  // their casual games were thrown away, which is the one thing that is not
-  // happening. lichess counts every perf, so it needs no such caveat.
   // The note is owned by the scan (startArchiveScan / applyScan), which knows
   // whether these numbers are the rated floor, a count in progress, or exact.
   if (!state.profiles.chesscom) $("speeds-msg").hidden = true
   $("card-speeds").hidden = false
   $("card-count").hidden = false
+  syncSpeedCounts()
+}
+
+/**
+ * Put the right number beside each speed and keep the checkboxes honest.
+ *
+ * Ticking "rated games only" can take a speed to zero - burkeley's only bullet
+ * and only blitz game are both casual. A ticked box against a zero is a lie
+ * about what the build will contain, so those speeds untick themselves. The
+ * inverse lives in onSpeedChange: ticking such a speed back on is a clear
+ * instruction to stop excluding casual games, so it releases the rated filter
+ * rather than bouncing straight back to zero.
+ */
+function syncSpeedCounts() {
+  const ratedOnly = $("rated").checked
+  state.counts = ratedOnly ? state.ratedCounts : state.allCounts
+  for (const lab of $("speeds").querySelectorAll(".speed")) {
+    const sp = lab.dataset.for
+    const n = state.counts[sp] || 0
+    const cb = lab.querySelector("input")
+    lab.querySelector(".ct").textContent = n.toLocaleString("en-US")
+    if (!n && cb.checked) { cb.checked = false; state.speeds.delete(sp) }
+    lab.classList.toggle("off", !cb.checked)
+    lab.classList.toggle("empty", !n)
+  }
   updateSlider()
+}
+
+function onSpeedChange(ev) {
+  const cb = ev.target.closest("input[type=checkbox]")
+  if (!cb || !cb.dataset.speed) return
+  const sp = cb.dataset.speed
+
+  // Turning a speed back on that "rated games only" had emptied: the player is
+  // asking for those games, and the only way to give them any is to stop
+  // filtering casual ones out. Release the filter and restore every count.
+  if (cb.checked && $("rated").checked && !(state.ratedCounts[sp] || 0)) {
+    $("rated").checked = false
+  }
+
+  if (cb.checked) state.speeds.add(sp)
+  else state.speeds.delete(sp)
+  syncSpeedCounts()
 }
 
 // ---------- uploaded PGN ----------
@@ -359,16 +414,21 @@ function describeUpload() {
   if (!u || (!u.games.length && !u.read)) { msg.hidden = true; return }
   const n = u.games.length
   const bits = [`<b>${n.toLocaleString("en-US")}</b> game${n === 1 ? "" : "s"} added`]
-  // Say what was dropped and why. A silent skip on an upload reads as the file
-  // not having worked, and the commonest cause by far is the wrong username.
+  // Say what happened and why. A silent skip on an upload reads as the file not
+  // having worked. Untimed games are listed too, but as something that HAPPENED
+  // rather than something that was lost - they are kept.
   const s = u.skipped
-  if (s.notYours) bits.push(`${s.notYours} not yours`)
+  if (s.untimed) bits.push(`${s.untimed} untimed`)
+  if (s.notYours) bits.push(`${s.notYours} played by someone else`)
   if (s.speed) bits.push(`${s.speed} outside the game types above`)
   if (s.variant) bits.push(`${s.variant} not standard chess`)
   if (s.tooShort) bits.push(`${s.tooShort} too short`)
   if (s.unreadable) bits.push(`${s.unreadable} unreadable`)
-  msg.innerHTML = bits.join(" &middot; ") +
-    (n ? "" : ` &mdash; is the username on those games one of the ones above?`)
+  // Only guess at a cause when the guess is a good one. Every game belonging to
+  // someone else is the wrong-username case; nothing added for any other reason
+  // is not, and saying so would send the reader after the wrong thing.
+  const hint = !n && s.notYours ? " &mdash; is the username on those games one of the ones above?" : ""
+  msg.innerHTML = bits.join(" &middot; ") + hint
   msg.hidden = false
 }
 
@@ -407,6 +467,8 @@ function wireUpload() {
   // it now moves the game total, so the slider and the build button have to
   // hear about it
   $("bots").addEventListener("change", () => { describeUpload(); updateSlider() })
+  // ticking it re-counts every speed and may untick the ones it empties
+  $("rated").addEventListener("change", () => { if (state.allCounts) syncSpeedCounts() })
   input.addEventListener("change", () => { takeFiles(input.files); input.value = "" })
 
   // dragover must be cancelled or the browser navigates to the file instead
@@ -423,18 +485,6 @@ function wireUpload() {
   for (const ev of ["dragover", "drop"]) {
     window.addEventListener(ev, (e) => { if (e.target.closest && !e.target.closest("#drop-wrap")) e.preventDefault() })
   }
-}
-
-function onSpeedChange(ev) {
-  const box = $("speeds")
-  box.addEventListener("change", onSpeedChange, { once: true })
-  const cb = ev.target.closest("input[type=checkbox]")
-  if (cb) {
-    cb.closest(".speed").classList.toggle("off", !cb.checked)
-    if (cb.checked) state.speeds.add(cb.dataset.speed)
-    else state.speeds.delete(cb.dataset.speed)
-  }
-  updateSlider()
 }
 
 /* ------------------------------------------------------------ the slider */
@@ -609,6 +659,7 @@ async function build() {
   $("recap-building").innerHTML =
     `<b>${cap}</b> <span>&middot;</span> <b>${n}</b> games <span>&middot;</span> ` +
     ($("rated").checked ? "rated only" : "rated and casual")
+  state.buildSize = n
   resetSteps()
   show("building", { top: true })
 
@@ -635,10 +686,10 @@ async function build() {
       show("setup", { top: true })
       return
     }
+    stopBar()
     const li = stepAt >= 0 && $("step-" + STEPS[stepAt][0])
     if (li) li.className = "step failed"
-    $("note").textContent = "Could not build that bot: " + (err.message || err)
-    $("left").textContent = ""
+    setNote("Could not build that bot: " + (err.message || err))
   }
 }
 
@@ -661,12 +712,94 @@ const STEPS = [
 // every earlier step done rather than assuming N-1 was the last one seen.
 let stepAt = -1
 
+/**
+ * The bar, on a clock rather than on the data.
+ *
+ * Driving the width straight off done/total made it lurch: scoring reports once
+ * per GAME, so on a 14-game build the bar jumped in 7% steps and sat still in
+ * between, and the probe and fit phases report a handful of times in total. The
+ * information was honest and the motion was useless.
+ *
+ * So each step gets a time estimate and the bar walks that estimate smoothly.
+ * Two rules keep it from lying. It never passes CEILING on the clock alone, so
+ * a step that overruns leaves the bar parked just short of full instead of
+ * claiming to be finished. And when the step really does end, the bar goes to
+ * 100% wherever it had got to - early or late, completion is what fills it.
+ */
+const BAR_CEILING = 0.94
+const BAR_ASYMPTOTE = 99.2
+// Seconds per step, scaled by the size of the job where the job has a size.
+// Measured on this machine against real builds rather than guessed: scoring is
+// the long pole at roughly 2.8s a game (about thirty decisions, each a depth-5
+// MultiPV-20 search), and the probe is a fixed ~12s of calibration whatever the
+// build size. They set the PACE only - the real event is what ends a step.
+const STEP_SECONDS = {
+  download: (n) => 2 + n * 0.02,
+  probe: () => 12,
+  score: (n) => 3 + n * 2.8,
+  fit: () => 8,
+  finish: () => 4,
+}
+
+let barTimer = null
+let barFrom = 0        // width the current step started at (always 0 today)
+let barStart = 0       // when the current step began
+let barSpan = 1000     // how long we think it will take, in ms
+
+// The note row only exists when it carries something; an always-present empty
+// row would be a fourth, invisible gap in a stack whose spacing is meant to be
+// even.
+function setNote(html) {
+  const note = $("note")
+  note.innerHTML = html || ""
+  note.parentElement.hidden = !html
+}
+
+function paintBar(pct) {
+  $("fill").style.width = Math.max(0, Math.min(100, pct)) + "%"
+}
+
+function stopBar() {
+  if (barTimer) { clearInterval(barTimer); barTimer = null }
+}
+
+// An ease-out: quick off the mark, slowing as it approaches the ceiling, which
+// is how a progress bar reads as "working" rather than as "counting down".
+function startBar(seconds) {
+  stopBar()
+  barFrom = 0
+  barStart = performance.now()
+  barSpan = Math.max(600, seconds * 1000)
+  paintBar(0)
+  barTimer = setInterval(() => {
+    const t = (performance.now() - barStart) / barSpan
+    if (t <= 1) {
+      // ease-out to the ceiling: quick off the mark, slowing as it approaches
+      const eased = 1 - Math.pow(1 - t, 2)
+      paintBar(barFrom + eased * (BAR_CEILING * 100 - barFrom))
+    } else {
+      // Past the estimate. An estimate is a guess and some machines are slow,
+      // so rather than freezing at the ceiling - which reads as a hang - it
+      // keeps closing on 99.2% by halves. Always moving, never arriving; only
+      // the step actually ending fills it.
+      const over = t - 1
+      const ceil = BAR_CEILING * 100
+      paintBar(BAR_ASYMPTOTE - (BAR_ASYMPTOTE - ceil) * Math.exp(-over))
+    }
+  }, 50)
+}
+
+function completeBar() {
+  stopBar()
+  paintBar(100)
+}
+
 function resetSteps() {
   stepAt = -1
+  stopBar()
   $("steps").innerHTML = ""
-  $("note").textContent = ""
-  $("left").textContent = ""
-  $("fill").style.width = "0%"
+  setNote("")
+  paintBar(0)
 }
 
 function stepRow(i) {
@@ -689,6 +822,8 @@ function detailOf(label) {
 }
 
 function enterStep(i) {
+  // whatever the bar had reached, the step ending is what fills it
+  if (stepAt >= 0) completeBar()
   for (let k = Math.max(stepAt, 0); k < i; k++) {
     const done = $("step-" + STEPS[k][0])
     if (done) { done.className = "step done"; done.querySelector(".detail").textContent = "" }
@@ -697,6 +832,8 @@ function enterStep(i) {
     if (!$("step-" + STEPS[k][0])) $("steps").appendChild(stepRow(k))
   }
   stepAt = i
+  const est = STEP_SECONDS[STEPS[i][0]]
+  startBar(est ? est(state.buildSize || 0) : 5)
 }
 
 function finishSteps() {
@@ -704,24 +841,21 @@ function finishSteps() {
     const li = $("step-" + STEPS[k][0])
     if (li) { li.className = "step done"; li.querySelector(".detail").textContent = "" }
   }
-  $("fill").style.width = "100%"
-  $("left").textContent = ""
+  completeBar()
 }
 
 function onProgress(p) {
   const i = STEPS.findIndex((s) => s[0] === p.phase)
   // An unknown phase still deserves its label rather than being dropped.
-  if (i === -1) { if (p.label) $("note").textContent = p.label; return }
+  if (i === -1) { if (p.label) setNote(p.label); return }
   if (i > stepAt) enterStep(i)
   if (i === stepAt) {
     const li = $("step-" + p.phase)
     if (li) li.querySelector(".detail").textContent = detailOf(p.label)
   }
-  if (p.total) {
-    const pct = Math.max(0, Math.min(100, Math.round((p.done / p.total) * 100)))
-    $("fill").style.width = pct + "%"
-  }
-  if (typeof p.secondsLeft === "number") $("left").textContent = prettyTime(p.secondsLeft) + " left"
+  // Deliberately does NOT move the bar. The bar is on its own clock; these
+  // events are far too lumpy to animate from - one per game, or three in total
+  // for a whole phase - and that lumpiness was the choppiness.
 }
 
 function titleCase(s) {
@@ -867,7 +1001,7 @@ async function boot() {
   for (const id of ["cc", "li"]) $(id).addEventListener("input", scheduleLookup)
   $("games").addEventListener("input", () => { state.sliderTouched = true; updateSlider() })
   $("build").addEventListener("click", build)
-  $("cancel").addEventListener("click", () => state.abort && state.abort.abort())
+  $("cancel").addEventListener("click", () => { stopBar(); state.abort && state.abort.abort() })
   $("play-it").addEventListener("click", () => openBoard(true))
   $("build-own").addEventListener("click", () => {
     history.replaceState(null, "", location.pathname)
