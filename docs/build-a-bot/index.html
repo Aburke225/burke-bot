@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
   <div class="wrap">
@@ -79,10 +79,17 @@
           <input type="file" id="pgn" accept=".pgn,.txt,application/vnd.chess-pgn,application/x-chess-pgn,text/plain" multiple hidden>
           <p class="drop-line">
             chess.com does not publish games against its bots.
-            Export them and drop the PGN here.
+            <span class="on-pointer">Export them and drop the PGN here.</span>
+            <span class="on-touch">Export them and upload the PGN here.</span>
           </p>
+          <!-- Touch only. There is nothing to drag FROM on a phone, so without a
+               button the box would be an instruction nobody can follow. It has no
+               handler of its own: the click bubbles to the box, which opens the
+               picker, so there is exactly one way in and no chance of opening it
+               twice. -->
+          <button class="btn" type="button" id="pgn-btn">Upload bot games</button>
         </div>
-        <p class="note" id="pgn-msg" hidden></p>
+        <div class="upload-result" id="pgn-msg" hidden></div>
         <p class="note who-row" id="pgn-who" hidden></p>
       </div>
 
@@ -234,6 +241,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=15"></script>
+  <script type="module" src="build-a-bot.js?v=17"></script>
 </body>
 </html>

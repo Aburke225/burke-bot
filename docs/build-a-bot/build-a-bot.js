@@ -232,12 +232,12 @@ async function startArchiveScan() {
 
   const note = $("speeds-msg")
   note.hidden = false
-  note.innerHTML = '<li class="busy">Counting your casual games&hellip;</li>'
+  note.innerHTML = '<li class="busy"><span class="t">Counting your casual games&hellip;</span></li>'
   try {
     const scan = await Games.scanChesscomArchive(prof.username, {}, (p) => {
       if (token !== scanToken) return
-      note.innerHTML = `<li class="busy">Counting your casual games&hellip; ` +
-        `<b>${p.found.toLocaleString("en-US")}</b> so far (${p.done} of ${p.total} months)</li>`
+      note.innerHTML = `<li class="busy"><span class="t">Counting your casual games&hellip; ` +
+        `<b>${p.found.toLocaleString("en-US")}</b> so far (${p.done} of ${p.total} months)</span></li>`
     })
     if (token !== scanToken) return
     applyScan(scan)
@@ -245,9 +245,9 @@ async function startArchiveScan() {
     if (token !== scanToken) return
     // The floor is still a usable number, so a failed scan is a note, not an
     // error state: say what is missing rather than pretending nothing happened.
-    note.innerHTML = '<li class="no">Could not read your full archive, so these are ' +
+    note.innerHTML = '<li class="no"><span class="t">Could not read your full archive, so these are ' +
       "chess.com's rated totals only &mdash; casual games are still downloaded " +
-      "and learned from.</li>"
+      "and learned from.</span></li>"
   }
 }
 
@@ -268,13 +268,13 @@ function applyScan(scan) {
   // and a cross carry that distinction faster than the prose did, and the
   // second line only exists when something actually fell out.
   const rows = [
-    `<li class="yes">Read from your whole archive, casual games included` +
+    `<li class="yes"><span class="t">Read from your whole archive, casual games included` +
     (casual > 0 ? ` &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual.` : ".") +
-    `</li>`,
+    `</span></li>`,
   ]
   if (short) {
-    rows.push(`<li class="no"><b>${short.toLocaleString("en-US")}</b> ` +
-      `game${short === 1 ? " was" : "s were"} too short to learn from.</li>`)
+    rows.push(`<li class="no"><span class="t"><b>${short.toLocaleString("en-US")}</b> ` +
+      `game${short === 1 ? " was" : "s were"} too short to learn from.</span></li>`)
   }
   note.innerHTML = rows.join("")
   note.hidden = false
@@ -420,28 +420,33 @@ function showBotControls() {
 function describeUpload() {
   const msg = $("pgn-msg")
   const u = state.upload
-  if (!u || (!u.games.length && !u.read)) { msg.hidden = true; return }
+  if (!u || (!u.games.length && !u.read)) { msg.hidden = true; msg.className = "upload-result"; return }
   const n = u.games.length
-  const bits = [`<b>${n.toLocaleString("en-US")}</b> game${n === 1 ? "" : "s"} added`]
-  // Say what happened and why. A silent skip on an upload reads as the file not
-  // having worked. Untimed games are listed too, but as something that HAPPENED
-  // rather than something that was lost - they are kept.
+
+  // The headline is the whole point: a file went in and games came out. It gets
+  // the size and the colour. Everything else - what was untimed, what was too
+  // short - is a footnote to that, and reads as one.
   const s = u.skipped
-  if (s.untimed) bits.push(`${s.untimed} untimed`)
-  if (s.unplaceable) bits.push(`${s.unplaceable} with neither player recognised`)
-  if (s.speed) bits.push(`${s.speed} outside the game types above`)
-  if (s.variant) bits.push(`${s.variant} not standard chess`)
-  if (s.tooShort) bits.push(`${s.tooShort} too short`)
-  if (s.unreadable) bits.push(`${s.unreadable} unreadable`)
+  const notes = []
+  if (s.untimed) notes.push(`${s.untimed} untimed`)
+  if (s.unplaceable) notes.push(`${s.unplaceable} with neither player recognised`)
+  if (s.speed) notes.push(`${s.speed} outside the game types above`)
+  if (s.variant) notes.push(`${s.variant} not standard chess`)
+  if (s.tooShort) notes.push(`${s.tooShort} too short`)
+  if (s.unreadable) notes.push(`${s.unreadable} unreadable`)
+
   // Only guess at a cause when the guess is a good one. Every game belonging to
-  // someone else is the wrong-username case; nothing added for any other reason
-  // is not, and saying so would send the reader after the wrong thing.
-  // The only remaining reason a game cannot be used is that we could not tell
-  // which side of it was the uploader, so that is what the hint says.
-  const hint = !n && s.unplaceable
-    ? " &mdash; none of these name a player we could match, so there is no way to tell which side was you"
-    : ""
-  msg.innerHTML = bits.join(" &middot; ") + hint
+  // someone else is the identity case; nothing added for any other reason is
+  // not, and saying so would send the reader after the wrong thing.
+  if (!n && s.unplaceable) {
+    notes.push("there is no way to tell which side was you")
+  }
+
+  msg.className = "upload-result " + (n ? "ok" : "none")
+  msg.innerHTML =
+    `<span class="head"><b>${n.toLocaleString("en-US")}</b> ` +
+    `game${n === 1 ? "" : "s"} added</span>` +
+    (notes.length ? `<span class="sub">${notes.join(" &middot; ")}</span>` : "")
   msg.hidden = false
 }
 

@@ -225,9 +225,17 @@ input[type=range]{
   list-style:none; margin:0; padding:0; text-align:left;
   font-size:.74rem; line-height:1.5; color:var(--ink-2);
 }
-.assure li{padding-left:1.05rem; position:relative}
+/* Baseline-aligned flex rather than an absolutely positioned glyph with a
+   guessed offset: the marker and the text then sit on one baseline by
+   construction, at any size, in any font. Wrapped text hangs under the text
+   rather than under the tick, which is what a checklist should do. */
+.assure li{display:flex; align-items:baseline; gap:.42rem}
 .assure li::before{
-  content:"\2713"; position:absolute; left:0; color:var(--accent); font-size:.8rem;
+  content:"\2713"; flex:none; width:.72rem; text-align:center;
+  color:var(--accent); font-size:1.106rem; line-height:1;
+  /* the tick's ink floats above the baseline; drop it by its own descent so
+     its foot lands ON the baseline, level with the capitals beside it */
+  transform:translateY(.093em);
 }
 
 /* What the archive scan found, as two statements rather than one paragraph:
@@ -239,17 +247,27 @@ input[type=range]{
   list-style:none; margin:.35rem 0 0; padding:0; text-align:left;
   font-size:.8rem; line-height:1.55; color:var(--ink-2);
 }
-.facts li{padding-left:1.25rem; position:relative}
+.facts li{display:flex; align-items:baseline; gap:.45rem}
+/* The row's text is ONE flex item. Without this wrapper a <b> inside it becomes
+   a flex item of its own and the sentence lays out as columns - which looked
+   fine on a desktop because it fitted on one line, and fell apart on a phone. */
+.facts li > .t{flex:1 1 auto; min-width:0}
 .facts li + li{margin-top:.2rem}
-.facts li::before{position:absolute; left:0; font-size:.85rem; line-height:1.5}
-.facts li.yes::before{content:"\2713"; color:var(--accent)}
-.facts li.no::before{content:"\00d7"; color:var(--warn)}
+/* Sized so each glyph's INK is the height of a capital letter beside it -
+   measured, not guessed, and the two need different sizes because the cross
+   carries less ink per em than the tick. */
+.facts li::before{flex:none; width:.8rem; text-align:center; line-height:1; transform:translateY(.093em)}
+.facts li.yes::before{content:"\2713"; color:var(--accent); font-size:1.195rem}
+.facts li.no::before{content:"\00d7"; color:var(--warn); font-size:1.316rem}
 /* Work still happening, not a fact yet. The same ring the build page's running
    step uses, down to the keyframe, so "this is going" looks identical wherever
    it appears. The global reduced-motion rule stops the spin and leaves the
    accent edge, which still reads as in-progress against a tick. */
 .facts li.busy::before{
-  content:""; width:.72rem; height:.72rem; top:.32rem;
+  /* one cap-height tall, so it occupies exactly the band the capitals do. As a
+     flex item with no text its baseline is its bottom edge, so baseline
+     alignment puts its foot on the text's baseline and no nudge is needed. */
+  content:""; width:.56rem; height:.56rem; transform:none;
   border:2px solid var(--border); border-top-color:var(--accent);
   border-radius:50%; animation:step-spin .8s linear infinite;
 }
@@ -470,12 +488,57 @@ body[data-route="shared"] footer{
 }
 .drop{cursor:pointer}
 .drop:hover{border-color:var(--accent-dim)}
+.drop-line .on-touch{display:none}
+#pgn-btn{display:none}
+
+/* A touch device cannot drag a file from anywhere, so the dashed "drop here"
+   box is describing something impossible. Keyed on the pointer rather than on
+   the width because that is the actual question - a narrow desktop window can
+   still drag, and a touch laptop still cannot. The box stays tappable either
+   way, so even where this query does not match the feature is reachable. */
+@media (hover:none) and (pointer:coarse){
+  .drop{border-style:solid; cursor:default}
+  .drop:hover{border-color:var(--border)}
+  .drop-line .on-pointer{display:none}
+  .drop-line .on-touch{display:inline}
+  #pgn-btn{display:inline-flex}
+}
 .drop.over{border-color:var(--accent); border-style:solid; background:var(--surface-2)}
 /* a dragged file must not land on a child and cancel the parent's dragleave */
 .drop.over *{pointer-events:none}
 .drop-line{margin:0; font-size:.84rem; color:var(--ink-2); line-height:1.5; max-width:30rem}
 .drop .btn{font-size:.9rem; padding:.45rem .95rem}
 .drop .note{margin:0}
+/* The upload confirmation. This is the moment a file the player went and
+   fetched turns into games, and it used to say so in the same small grey type
+   as every other footnote on the card. It now reads as an outcome: a tinted
+   panel, the count at display size, and the caveats demoted underneath. The
+   accent tint is the same one the copy button flashes on success, so "that
+   worked" looks the same here as it does there. */
+.upload-result{
+  display:flex; flex-direction:column; align-items:center; gap:.1rem;
+  margin:.85rem auto 0; padding:.6rem 1rem; width:fit-content; max-width:100%;
+  border:1px solid var(--accent); border-radius:10px;
+  background:rgba(var(--accent-rgb),.12); background-clip:padding-box;
+}
+.upload-result .head{
+  display:flex; align-items:baseline; gap:.45rem;
+  font-size:1.02rem; color:var(--ink); line-height:1.35;
+}
+.upload-result .head::before{
+  content:"\2713"; flex:none; color:var(--accent);
+  font-size:1.52rem; line-height:1; transform:translateY(.093em);
+}
+.upload-result .head b{font-weight:500; color:var(--accent); font-size:1.22rem}
+.upload-result .sub{font-size:.78rem; color:var(--ink-2); line-height:1.5; text-align:center}
+
+/* Nothing came in. Same shape so the page does not jump, opposite reading: the
+   warning ink and a cross, because a green tick over "0 games added" would be
+   celebrating a failure. */
+.upload-result.none{border-color:var(--warn); background:rgba(217,164,65,.1)}
+.upload-result.none .head::before{content:"\00d7"; color:var(--warn); font-size:1.67rem}
+.upload-result.none .head b{color:var(--warn)}
+
 /* who the games were read as, with the other names in the file one click away */
 .who-row{margin:.45rem 0 0; line-height:1.9}
 .who-row b{color:var(--ink)}
