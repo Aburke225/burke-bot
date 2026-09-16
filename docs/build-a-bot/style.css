@@ -459,6 +459,9 @@ body[data-route="shared"] footer{
   transition:border-color .15s, color .15s;
 }
 .who-row .who:hover{border-color:var(--accent); color:var(--ink)}
+.who-row .who.more{border-style:dashed}
+/* a long list has to stay inside the card rather than push it wider */
+.who-row{max-height:11rem; overflow-y:auto}
 
 /* result */
 .stats{

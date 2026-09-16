@@ -42,7 +42,7 @@ const state = {
   scan: null,          // exact chess.com counts, once the archive has been read
   allCounts: null,     // speed -> every game
   ratedCounts: null,   // speed -> the rated ones only
-  upload: { games: [], read: 0, texts: [], players: null, identity: null, source: null, mod: null, skipped: { unplaceable: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 } },
+  upload: { games: [], read: 0, texts: [], players: null, identity: null, source: null, mod: null, showAllNames: false, skipped: { unplaceable: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 } },
 }
 
 /* ---------------------------------------------------------------- routing */
@@ -507,6 +507,8 @@ function reparseUpload() {
  * whenever the name was inferred rather than matched to an account they gave
  * us, it is stated plainly with the other names in the file one click away.
  */
+const IDENTITY_SHOWN = 6
+
 function renderIdentity() {
   const box = $("pgn-who")
   const u = state.upload
@@ -516,12 +518,21 @@ function renderIdentity() {
   // three hundred opponents; every one of them would be offered as "not you?".
   if (u.source === "account") { box.hidden = true; return }
 
-  const others = u.players.filter((p) => p.name !== u.identity).slice(0, 6)
+  // Six, because the list is sorted by how many games each player appears in and
+  // the real alternative is always near the top. A personal export makes that
+  // stark: burkeley is in 331 of 331 games, the next name in 10, and 306 of the
+  // 313 others appear exactly once. Showing all of them would be a wall of
+  // strangers. But the cap is stated rather than silent - a truncated list that
+  // does not admit it is how someone concludes their name is not there at all.
+  const rest = u.players.filter((p) => p.name !== u.identity)
+  const others = u.showAllNames ? rest : rest.slice(0, IDENTITY_SHOWN)
+  const hidden = rest.length - others.length
   box.innerHTML =
     `Read as <b>${escapeHtml(u.identity)}</b>'s games.` +
     (others.length ? ` Not you? ` + others.map((p) =>
       `<button type="button" class="who" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`
-    ).join(" ") : "")
+    ).join(" ") : "") +
+    (hidden > 0 ? ` <button type="button" class="who more" data-more="1">+${hidden.toLocaleString("en-US")} more</button>` : "")
   box.hidden = false
 }
 
@@ -540,6 +551,7 @@ function wireUpload() {
   $("pgn-who").addEventListener("click", (ev) => {
     const b = ev.target.closest("button.who")
     if (!b) return
+    if (b.dataset.more) { state.upload.showAllNames = true; renderIdentity(); return }
     state.upload.identity = b.dataset.name
     state.upload.source = "chosen"
     reparseUpload()
