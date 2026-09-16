@@ -563,7 +563,10 @@ function escapeHtml(s) {
 function wireUpload() {
   const wrap = $("drop-wrap")
   const input = $("pgn")
-  $("pgn-btn").addEventListener("click", () => input.click())
+  // The box IS the control now that the button is gone. Without this the whole
+  // feature would be drag-only, which is the same as saying it does not exist
+  // on a phone - there is nothing to drag from on a touch screen.
+  wrap.addEventListener("click", () => input.click())
   // it now moves the game total, so the slider and the build button have to
   // hear about it
   $("bots").addEventListener("change", () => { describeUpload(); updateSlider() })
