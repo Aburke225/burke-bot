@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <div class="wrap">
@@ -70,7 +70,7 @@
           <label class="tg"><input type="checkbox" id="rated"> Rated games only</label>
           <label class="tg" id="bots-wrap" hidden><input type="checkbox" id="bots"> Include games against bots</label>
         </div>
-        <p class="note" id="speeds-msg" hidden></p>
+        <ul class="facts" id="speeds-msg" hidden></ul>
 
         <!-- chess.com only. lichess publishes its bot games through the API, so
              there the checkbox above already covers them; chess.com publishes
@@ -236,6 +236,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=11"></script>
+  <script type="module" src="build-a-bot.js?v=12"></script>
 </body>
 </html>

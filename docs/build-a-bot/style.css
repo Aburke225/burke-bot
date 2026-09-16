@@ -136,7 +136,7 @@ label.lbl{
 }
 /* Setup centres its controls; only each section's own heading and description
    stay left, so the eye still has a fixed edge to read down. */
-#setup .card > *:not(h2):not(.sub){text-align:center}
+#setup .card > *:not(h2):not(.sub):not(.facts){text-align:center}
 #setup .toggles{justify-content:center}
 /* The assurances sit ABOVE the button: read the promises, then act on them.
    Both are centred as blocks while the list keeps its own left-aligned text, so
@@ -229,6 +229,22 @@ input[type=range]{
 .assure li::before{
   content:"\2713"; position:absolute; left:0; color:var(--accent); font-size:.8rem;
 }
+
+/* What the archive scan found, as two statements rather than one paragraph:
+   one thing gained, one thing lost. Same tick as the assurances above, and the
+   same cross the failed build step uses, so a reader who has seen either one
+   already knows which way each line points. Left-aligned against the card's
+   heading while the chips and toggles above stay centred. */
+.facts{
+  list-style:none; margin:.35rem 0 0; padding:0; text-align:left;
+  font-size:.8rem; line-height:1.55; color:var(--ink-2);
+}
+.facts li{padding-left:1.25rem; position:relative}
+.facts li + li{margin-top:.2rem}
+.facts li::before{position:absolute; left:0; font-size:.85rem; line-height:1.5}
+.facts li.yes::before{content:"\2713"; color:var(--accent)}
+.facts li.no::before{content:"\00d7"; color:var(--warn)}
+.facts b{color:var(--ink)}
 
 /* the shared-link landing page: Burke Bot's board column, nothing else.
    The eval gutter is carried over so the player rows, the board and the resign

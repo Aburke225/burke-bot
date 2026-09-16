@@ -232,12 +232,12 @@ async function startArchiveScan() {
 
   const note = $("speeds-msg")
   note.hidden = false
-  note.innerHTML = "Counting your casual games&hellip;"
+  note.innerHTML = '<li class="yes">Counting your casual games&hellip;</li>'
   try {
     const scan = await Games.scanChesscomArchive(prof.username, {}, (p) => {
       if (token !== scanToken) return
-      note.innerHTML = `Counting your casual games&hellip; <b>${p.found.toLocaleString("en-US")}</b> so far ` +
-        `(${p.done} of ${p.total} months)`
+      note.innerHTML = `<li class="yes">Counting your casual games&hellip; ` +
+        `<b>${p.found.toLocaleString("en-US")}</b> so far (${p.done} of ${p.total} months)</li>`
     })
     if (token !== scanToken) return
     applyScan(scan)
@@ -245,8 +245,9 @@ async function startArchiveScan() {
     if (token !== scanToken) return
     // The floor is still a usable number, so a failed scan is a note, not an
     // error state: say what is missing rather than pretending nothing happened.
-    note.innerHTML = "Could not read your full archive, so these are chess.com's " +
-      "rated totals only - casual games are still downloaded and learned from."
+    note.innerHTML = '<li class="no">Could not read your full archive, so these are ' +
+      "chess.com's rated totals only &mdash; casual games are still downloaded " +
+      "and learned from.</li>"
   }
 }
 
@@ -263,13 +264,19 @@ function applyScan(scan) {
   // but teaches nothing). What is left is the number of games that will
   // actually be used, which is the only number worth putting on a slider.
   const short = scan.tooShort || 0
-  note.innerHTML =
-    (casual > 0
-      ? `Read from your whole archive, casual games included &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual.`
-      : "Read from your whole archive.") +
-    (short
-      ? ` <b>${short.toLocaleString("en-US")}</b> game${short === 1 ? " was" : "s were"} too short to learn from.`
-      : "")
+  // Two statements, not one sentence: what came in, and what did not. A tick
+  // and a cross carry that distinction faster than the prose did, and the
+  // second line only exists when something actually fell out.
+  const rows = [
+    `<li class="yes">Read from your whole archive, casual games included` +
+    (casual > 0 ? ` &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual.` : ".") +
+    `</li>`,
+  ]
+  if (short) {
+    rows.push(`<li class="no"><b>${short.toLocaleString("en-US")}</b> ` +
+      `game${short === 1 ? " was" : "s were"} too short to learn from.</li>`)
+  }
+  note.innerHTML = rows.join("")
   note.hidden = false
   updateSlider()
 }
