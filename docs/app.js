@@ -298,8 +298,9 @@ const CAP_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 }
 // site's own mark, and the glyph is pulled from the board's sprite so it is
 // literally the same artwork the pieces are drawn from.
 const ICON_VIEWBOX = "-1.04 -1.04 26.09 26.09"
+const PAWN_VIEWBOX = "-2.2 -2.25 28.4 28.4"
 const HUMAN_AVATAR = [
-  '<svg viewBox="' + ICON_VIEWBOX + '" aria-hidden="true">',
+  '<svg viewBox="' + PAWN_VIEWBOX + '" aria-hidden="true">',
   '<g fill="#e9ecd6">',
   // Head up from r 3.6 to 4.2. The 0.9-unit gap he picked is preserved, so the
   // collar and everything under it moves down with the head's new bottom edge,
