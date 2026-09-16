@@ -371,7 +371,11 @@ footer a { color: var(--ink-2); }
   width: 21ch;
 }
 
-.bb-me-input::placeholder { text-indent: 0.4em; }
+/* Halfway back. The caret blinks at the field's text origin, and at 0 it sat
+   on the "p" of "password"; 0.4em cleared it but pushed the hint noticeably off
+   the left edge, so 0.2em keeps the caret clear without the gap reading as
+   indentation. */
+.bb-me-input::placeholder { text-indent: 0.2em; }
 /* The UA focus ring is blue, which belongs to no part of this palette. Replaced
    rather than removed - dropping outline without putting something back would
    leave the field with no focus indicator at all. */
