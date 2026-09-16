@@ -244,6 +244,15 @@ input[type=range]{
 .facts li::before{position:absolute; left:0; font-size:.85rem; line-height:1.5}
 .facts li.yes::before{content:"\2713"; color:var(--accent)}
 .facts li.no::before{content:"\00d7"; color:var(--warn)}
+/* Work still happening, not a fact yet. The same ring the build page's running
+   step uses, down to the keyframe, so "this is going" looks identical wherever
+   it appears. The global reduced-motion rule stops the spin and leaves the
+   accent edge, which still reads as in-progress against a tick. */
+.facts li.busy::before{
+  content:""; width:.72rem; height:.72rem; top:.32rem;
+  border:2px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:step-spin .8s linear infinite;
+}
 .facts b{color:var(--ink)}
 
 /* the shared-link landing page: Burke Bot's board column, nothing else.
@@ -476,6 +485,10 @@ body[data-route="shared"] footer{
 }
 .who-row .who:hover{border-color:var(--accent); color:var(--ink)}
 .who-row .who.more{border-style:dashed}
+/* a guess rather than a reading: the lead is worded differently and sits in the
+   warning ink, so the buttons beside it read as something to act on */
+.who-row.guess{color:var(--warn)}
+.who-row.guess b{color:var(--warn)}
 /* a long list has to stay inside the card rather than push it wider */
 .who-row{max-height:11rem; overflow-y:auto}
 

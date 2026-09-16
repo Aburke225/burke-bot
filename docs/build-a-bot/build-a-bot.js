@@ -232,11 +232,11 @@ async function startArchiveScan() {
 
   const note = $("speeds-msg")
   note.hidden = false
-  note.innerHTML = '<li class="yes">Counting your casual games&hellip;</li>'
+  note.innerHTML = '<li class="busy">Counting your casual games&hellip;</li>'
   try {
     const scan = await Games.scanChesscomArchive(prof.username, {}, (p) => {
       if (token !== scanToken) return
-      note.innerHTML = `<li class="yes">Counting your casual games&hellip; ` +
+      note.innerHTML = `<li class="busy">Counting your casual games&hellip; ` +
         `<b>${p.found.toLocaleString("en-US")}</b> so far (${p.done} of ${p.total} months)</li>`
     })
     if (token !== scanToken) return
@@ -534,8 +534,20 @@ function renderIdentity() {
   const rest = u.players.filter((p) => p.name !== u.identity)
   const others = u.showAllNames ? rest : rest.slice(0, IDENTITY_SHOWN)
   const hidden = rest.length - others.length
+  // An inference from a clear protagonist and a coin toss between two equally
+  // present names are not the same claim, and until now they were worded as if
+  // they were. "ambiguous" means the file had no protagonist at all - a single
+  // game between two strangers - so the name shown is White of the first game
+  // and nothing more. Saying so is what makes the buttons beside it look worth
+  // reading, which matters here more than anywhere else on the page: picking
+  // the wrong side does not fail, it fits the opponent's style and every
+  // number still looks right.
+  const lead = u.source === "ambiguous"
+    ? `Could not tell which player is you &mdash; reading as <b>${escapeHtml(u.identity)}</b>.`
+    : `Read as <b>${escapeHtml(u.identity)}</b>'s games.`
+  box.classList.toggle("guess", u.source === "ambiguous")
   box.innerHTML =
-    `Read as <b>${escapeHtml(u.identity)}</b>'s games.` +
+    lead +
     (others.length ? ` Not you? ` + others.map((p) =>
       `<button type="button" class="who" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`
     ).join(" ") : "") +
