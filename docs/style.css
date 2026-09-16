@@ -176,7 +176,20 @@ body {
 
 .board { width: 100%; aspect-ratio: 1 / 1; } /* reserve the square before the svg exists */
 
-.controls { display: flex; gap: 0.7rem; justify-content: flex-start; }
+/* One row, centred on whatever it sits under: the moves card on a desktop
+   (where app.js parks it in .panel) and the board on a stacked layout (where
+   app.js parks it in .board-col). In both cases the row's own box already
+   spans exactly that element's width - measured, identical to the pixel - so
+   centring the flex line is all the centring this needs. */
+.controls { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; }
+/* nowrap on the LABEL is what makes the row behave. Without it flex has a free
+   hand to squeeze a button below its text and let "Build your own bot!" run to
+   two or three lines inside a shrunken box; with it the button cannot go under
+   its text, so when the pair genuinely will not fit the ROW wraps instead and
+   the two buttons stack, still centred. Two clean rows beat one mangled one.
+   Nothing wraps at any width a person is likely to use - see the two narrow
+   bands noted below. */
+.controls .btn { white-space: nowrap; }
 /* The Mirror Bot entry point. It navigates, so it is an anchor rather than a
    button, which means it needs the box .btn otherwise gets for free. */
 #build-btn { display: inline-flex; align-items: center; text-decoration: none; }
@@ -609,6 +622,21 @@ footer a { color: var(--ink-2); }
    equal box sizes the tick therefore paints a bit over half the height of the
    clipboard and reads as undersized. That is geometry, not taste, so the fix
    is a per-icon box rather than a nudge to the shared rule. */
+/* THE NARROW-PANEL BAND. From 861px - the instant the layout un-stacks - up to
+   956px, the root font sits pinned on the 13px floor of its clamp while the
+   panel track keeps shrinking with the window. So the column this pair sits in
+   falls to 20.19rem at 861px, against the 21.11rem the two buttons need at full
+   size. white-space:nowrap means they can no longer squeeze, so without this
+   they wrap onto two rows - and one row is the whole point.
+
+   956px is where the clamp stops saturating and the panel stops losing rem: from
+   there up it holds a steady 22.69rem, so the slack is the same 1.57rem it has at
+   every other desktop width and that is the honest place to hand back full size.
+   A mouse-only band, so no touch-target floor here - that lives in the phone rule. */
+@media (min-width: 861px) and (max-width: 955px) {
+  .controls .btn { font-size: 0.82rem; padding: 0.45rem 0.6rem; }
+}
+
 @media (min-width: 861px) {
   .copy-btn { width: 1.86rem; height: 1.86rem; }
   .copy-btn svg { width: 1.04rem; height: 1.04rem; }
@@ -629,10 +657,21 @@ footer a { color: var(--ink-2); }
      so it still lines up with the numbers above it. */
   .stats-card dt.wide { float: none; margin-right: 0; }
   .wrap { --eval-w: calc(1.45rem + 21px); }
-  /* Resign moves to the right-hand end of its row, which in the stacked layout
-     ends exactly at the board's right edge - so the page reads content flush
-     left to the board and its one action flush right. */
-  .controls { justify-content: flex-end; }
+  /* The pair is centred under the board by the base rule. For that to be
+     visible the two buttons have to stop being squeezed to fill the row: at
+     their full size they want 336px and the board is 274px wide on a 375px
+     phone, so flex shrank "Build your own bot!" by up to 115px and its label
+     wrapped to two lines (three at 320px). Same fix, same numbers, as the
+     overlay buttons a few rules up - smaller type and tighter padding - which
+     brings the pair inside the board's width with slack on both sides. */
+  .controls .btn {
+    font-size: 0.82rem; padding: 0.45rem 0.6rem;
+    /* Only the WIDTH had to come down. Smaller type took the height down with
+       it - 45.9px to 36.7px - and this is the one place on the page a thumb
+       actually taps, so the height comes back as a floor: 2.75rem is the 44px
+       iOS/Android target minimum. The padding still governs the width. */
+    min-height: 2.75rem;
+  }
   /* the rows shrink with everything else so the board keeps the width */
   .wrap { --player-h: 2.45rem; }
   .player { gap: 0.5rem; }
@@ -665,8 +704,11 @@ footer a { color: var(--ink-2); }
     margin-right: calc(var(--eval-w) / 2);
   }
   .wordmark, .tagline, .foot-inner, .player { padding-left: calc(var(--eval-w) / 2); }
-  /* Resign still ends exactly at the board's right edge, so its row has to
-     shrink to the board on BOTH sides now that the board has moved. */
+  /* The row has to shrink to the board on BOTH sides now that the board has
+     moved, so that the centred pair lands on the board's axis rather than half
+     a gutter left of it. Because the board is itself centred on the page at
+     this width, that axis and the page's are the same one - measured equal to
+     the pixel at 360, 375, 393, 414 and 430. */
   .controls {
     margin-left: calc(var(--eval-w) / 2);
     margin-right: calc(var(--eval-w) / 2);
