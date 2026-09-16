@@ -65,7 +65,12 @@ body {
   position: relative; opacity: 1; transition: opacity 0.18s ease;
   /* + the eval gutter, which is part of the board column but not part of the
      board, so the BOARD itself lands at lichess's 76-80% of viewport height */
-  --board-max: clamp(360px, calc(74vh + 4.5rem), 1200px);
+  /* 68.88vh, not 74vh: the page needed a constant 105.11% of the window height
+     (measured identical at 800 and 900 tall, because the root font is itself
+     1.78vh so the chrome grows at the same rate the board does). Taking the
+     whole 5.11% off the board lands the Pawnling row on the fold, so nothing
+     between the top of the page and the bottom of that row needs scrolling. */
+  --board-max: clamp(360px, calc(68.88vh + 4.5rem), 1200px);
   --eval-w: 3.85rem;  /* 2.1rem number + bar + gaps, all in rem so it scales */
   --player-h: 2.75rem;    /* avatar box = the two text lines beside it */
   --player-gap: 0.5rem;
