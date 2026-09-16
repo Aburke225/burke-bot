@@ -1063,21 +1063,93 @@ export function gameKey(g) {
 }
 
 /**
+ * Names in a PGN are written however the exporting site felt like writing them:
+ * "burkeley", "Burke, Andrew", "Andrew Burke", "BURKE,A." A straight string
+ * compare treats those as four different people, which is exactly how an OTB
+ * export ends up reported as somebody else's games. Lower-case it, drop
+ * punctuation and accents, and sort the parts, so word order and comma style
+ * stop mattering.
+ */
+export function normName(s) {
+  return String(s || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s,]/g, " ")
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .sort()
+    .join(" ")
+}
+
+/** Every player named in a PGN, most games first. */
+export function pgnPlayers(text) {
+  const seen = new Map()
+  for (const chunk of splitPgn(text)) {
+    const t = pgnTags(chunk)
+    for (const raw of [t.White, t.Black]) {
+      if (!raw) continue
+      const key = normName(raw)
+      if (!key) continue
+      const hit = seen.get(key) || { name: raw, key, games: 0 }
+      hit.games++
+      seen.set(key, hit)
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.games - a.games)
+}
+
+/**
+ * Work out who the uploader is without making them prove it.
+ *
+ * Preference goes to a name that matches an account they already gave us,
+ * because that is a fact rather than a guess. Failing that, the player who
+ * appears in the most games IS the person whose collection this is - that is
+ * what a personal export looks like. Only a file with no clear protagonist
+ * comes back empty.
+ */
+export function inferPgnIdentity(text, usernames = []) {
+  const players = pgnPlayers(text)
+  if (!players.length) return null
+  const wanted = usernames.map(normName).filter(Boolean)
+  const known = players.find((p) => wanted.includes(p.key))
+  if (known) return { ...known, source: "account" }
+  // a tie for the lead means no protagonist, so there is nobody to infer
+  if (players.length > 1 && players[1].games === players[0].games) {
+    return { ...players[0], source: "ambiguous" }
+  }
+  return { ...players[0], source: "inferred" }
+}
+
+/**
  * Parse an exported PGN into the same shape fetchGames returns.
  *
- * opts: { usernames: [string], speeds }
+ * opts: { identity, usernames: [string], speeds }
  *
- * The rated filter is deliberately NOT applied. Games against bots are unrated
- * by definition, so running the checkbox over a file the player hand-picked
- * would throw away precisely what the upload exists to add. The speed filter IS
- * applied, because the per-speed choices above it are an explicit instruction
- * and the weighting downstream depends on them.
+ * WHAT IS NOT CHECKED. There is no gate on the uploader's username. A file they
+ * went and exported is theirs by assertion, so an OTB scoresheet naming them
+ * "Burke, Andrew", a lichess study, an ICC or Chess24 export - none of them have
+ * to match anything typed on the page. The rated filter is not applied either:
+ * games against bots are unrated by definition, so it would throw away exactly
+ * what the upload exists to add.
+ *
+ * WHAT STILL IS. The speed choices, and the same standard-chess, standard-start
+ * and minimum-length rules every downloaded game passes.
+ *
+ * And identity - which is not a permission check but a data requirement. The
+ * whole model is "the move THIS PLAYER chose", so a game is only usable once we
+ * know which side of it they were. Guessing wrong does not fail loudly; it
+ * quietly fits the opponent's style instead, and every training number still
+ * looks fine. So the caller passes an identity (inferPgnIdentity works it out
+ * without asking) and a game it cannot place is reported rather than assigned a
+ * colour by coin toss.
  */
 export function parsePgn(text, opts = {}) {
-  const names = (opts.usernames || []).map((u) => String(u || "").toLowerCase()).filter(Boolean)
+  const extra = (opts.usernames || []).map(normName).filter(Boolean)
+  const me = opts.identity ? normName(opts.identity) : null
+  const names = [me, ...extra].filter(Boolean)
   const speeds = opts.speeds && opts.speeds.length ? opts.speeds : SPEEDS
   const games = []
-  const skipped = { notYours: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 }
+  const skipped = { unplaceable: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 }
   let read = 0
 
   for (const chunk of splitPgn(text)) {
@@ -1089,10 +1161,10 @@ export function parsePgn(text, opts = {}) {
     if (tags.Variant && !/^standard$/i.test(tags.Variant)) { skipped.variant++; continue }
     if (tags.FEN && tags.FEN.trim() !== START_FEN) { skipped.variant++; continue }
 
-    const white = String(tags.White || "").toLowerCase()
-    const black = String(tags.Black || "").toLowerCase()
+    const white = normName(tags.White)
+    const black = normName(tags.Black)
     const color = names.includes(white) ? "w" : names.includes(black) ? "b" : null
-    if (!color) { skipped.notYours++; continue }
+    if (!color) { skipped.unplaceable++; continue }
 
     // Two very different reasons to have no usable time class, and lumping them
     // together made the one that matters unreadable: a chess.com game against a

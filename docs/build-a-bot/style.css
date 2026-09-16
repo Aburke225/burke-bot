@@ -449,6 +449,16 @@ body[data-route="shared"] footer{
 .drop-line{margin:0; font-size:.84rem; color:var(--ink-2); line-height:1.5; max-width:30rem}
 .drop .btn{font-size:.9rem; padding:.45rem .95rem}
 .drop .note{margin:0}
+/* who the games were read as, with the other names in the file one click away */
+.who-row{margin:.45rem 0 0; line-height:1.9}
+.who-row b{color:var(--ink)}
+.who-row .who{
+  font:inherit; font-size:.78rem; margin-left:.3rem;
+  padding:.15rem .5rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); color:var(--ink-2); cursor:pointer;
+  transition:border-color .15s, color .15s;
+}
+.who-row .who:hover{border-color:var(--accent); color:var(--ink)}
 
 /* result */
 .stats{

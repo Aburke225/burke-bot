@@ -42,7 +42,7 @@ const state = {
   scan: null,          // exact chess.com counts, once the archive has been read
   allCounts: null,     // speed -> every game
   ratedCounts: null,   // speed -> the rated ones only
-  upload: { games: [], read: 0, skipped: { notYours: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 } },
+  upload: { games: [], read: 0, texts: [], players: null, identity: null, source: null, mod: null, skipped: { unplaceable: 0, speed: 0, untimed: 0, variant: 0, tooShort: 0, unreadable: 0 } },
 }
 
 /* ---------------------------------------------------------------- routing */
@@ -373,7 +373,9 @@ function onSpeedChange(ev) {
 
   if (cb.checked) state.speeds.add(sp)
   else state.speeds.delete(sp)
-  syncSpeedCounts()
+  // uploaded games are filtered by speed too, so they have to be re-read
+  if (state.upload.texts && state.upload.texts.length) reparseUpload()
+  else syncSpeedCounts()
 }
 
 // ---------- uploaded PGN ----------
@@ -419,7 +421,7 @@ function describeUpload() {
   // rather than something that was lost - they are kept.
   const s = u.skipped
   if (s.untimed) bits.push(`${s.untimed} untimed`)
-  if (s.notYours) bits.push(`${s.notYours} played by someone else`)
+  if (s.unplaceable) bits.push(`${s.unplaceable} with neither player recognised`)
   if (s.speed) bits.push(`${s.speed} outside the game types above`)
   if (s.variant) bits.push(`${s.variant} not standard chess`)
   if (s.tooShort) bits.push(`${s.tooShort} too short`)
@@ -427,7 +429,11 @@ function describeUpload() {
   // Only guess at a cause when the guess is a good one. Every game belonging to
   // someone else is the wrong-username case; nothing added for any other reason
   // is not, and saying so would send the reader after the wrong thing.
-  const hint = !n && s.notYours ? " &mdash; is the username on those games one of the ones above?" : ""
+  // The only remaining reason a game cannot be used is that we could not tell
+  // which side of it was the uploader, so that is what the hint says.
+  const hint = !n && s.unplaceable
+    ? " &mdash; none of these name a player we could match, so there is no way to tell which side was you"
+    : ""
   msg.innerHTML = bits.join(" &middot; ") + hint
   msg.hidden = false
 }
@@ -435,29 +441,93 @@ function describeUpload() {
 async function takeFiles(files) {
   const list = [...files].filter((f) => f && f.size)
   if (!list.length) return
-  const names = uploadNames()
-  if (!names.length) return
-  const { parsePgn, gameKey } = await import("./games.js")
+  const G = state.upload.mod || (state.upload.mod = await import("./games.js"))
 
-  const seen = new Set((state.upload.games || []).map(gameKey))
-  const skipped = state.upload.skipped
+  state.upload.texts = state.upload.texts || []
   for (const f of list) {
-    let text
-    try { text = await f.text() } catch { skipped.unreadable++; continue }
-    const r = parsePgn(text, { usernames: names, speeds: [...state.speeds] })
-    state.upload.read += r.read
-    for (const k of Object.keys(skipped)) skipped[k] += r.skipped[k] || 0
-    // Dropping the same file twice must not double its games.
+    try { state.upload.texts.push(await f.text()) }
+    catch { state.upload.skipped.unreadable++ }
+  }
+  // Identity is worked out from the FILES, not demanded of the player. Only if
+  // the file has no clear protagonist does anything get asked.
+  const all = state.upload.texts.join("\n\n")
+  state.upload.players = G.pgnPlayers(all)
+  const found = G.inferPgnIdentity(all, uploadNames())
+  if (found && (!state.upload.identity || found.source === "account")) {
+    state.upload.identity = found.name
+    state.upload.source = found.source
+  }
+  reparseUpload()
+}
+
+// Re-reads every file held so far under the current identity. Cheap - the text
+// is already in memory - and it means changing who "you" are re-decides every
+// game's colour at once instead of only the next file's.
+function reparseUpload() {
+  const G = state.upload.mod
+  const u = state.upload
+  u.games = []
+  u.read = 0
+  for (const k of Object.keys(u.skipped)) u.skipped[k] = 0
+  // Which speeds an upload may use. A class the player HAS and has unticked is
+  // a real instruction, so it is honoured. A class with no row on screen at all
+  // - classical, when their online account has never played one - is not a
+  // choice they declined, it is a choice they were never offered, and dropping
+  // an over-the-board game for failing it would be the untimed bug again.
+  const onScreen = new Set(Object.keys(state.allCounts || {}))
+  const speeds = SPEEDS_ALL.filter((sp) => !onScreen.has(sp) || state.speeds.has(sp))
+
+  const seen = new Set()
+  for (const text of u.texts || []) {
+    const r = G.parsePgn(text, {
+      identity: u.identity,
+      usernames: uploadNames(),
+      speeds,
+    })
+    u.read += r.read
+    for (const k of Object.keys(u.skipped)) u.skipped[k] += r.skipped[k] || 0
     for (const g of r.games) {
-      const k = gameKey(g)
+      const k = G.gameKey(g)          // the same file twice must not double up
       if (seen.has(k)) continue
       seen.add(k)
-      state.upload.games.push(g)
+      u.games.push(g)
     }
   }
   describeUpload()
+  renderIdentity()
   showBotControls()
   updateSlider()
+}
+
+/**
+ * Say who we took the games to belong to, and let that be corrected.
+ *
+ * Silent is not an option here. Reading the wrong side of the board does not
+ * fail - it fits the opponent's style and every number still looks right - so
+ * whenever the name was inferred rather than matched to an account they gave
+ * us, it is stated plainly with the other names in the file one click away.
+ */
+function renderIdentity() {
+  const box = $("pgn-who")
+  const u = state.upload
+  if (!u.identity || !u.players || u.players.length < 2) { box.hidden = true; return }
+  // Nothing to confirm when the name in the file is an account they typed - we
+  // are not guessing, so asking would be noise. Their own chess.com export names
+  // three hundred opponents; every one of them would be offered as "not you?".
+  if (u.source === "account") { box.hidden = true; return }
+
+  const others = u.players.filter((p) => p.name !== u.identity).slice(0, 6)
+  box.innerHTML =
+    `Read as <b>${escapeHtml(u.identity)}</b>'s games.` +
+    (others.length ? ` Not you? ` + others.map((p) =>
+      `<button type="button" class="who" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`
+    ).join(" ") : "")
+  box.hidden = false
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
 }
 
 function wireUpload() {
@@ -467,6 +537,13 @@ function wireUpload() {
   // it now moves the game total, so the slider and the build button have to
   // hear about it
   $("bots").addEventListener("change", () => { describeUpload(); updateSlider() })
+  $("pgn-who").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button.who")
+    if (!b) return
+    state.upload.identity = b.dataset.name
+    state.upload.source = "chosen"
+    reparseUpload()
+  })
   // ticking it re-counts every speed and may untick the ones it empties
   $("rated").addEventListener("change", () => { if (state.allCounts) syncSpeedCounts() })
   input.addEventListener("change", () => { takeFiles(input.files); input.value = "" })

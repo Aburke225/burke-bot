@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <div class="wrap">
@@ -79,11 +79,13 @@
           <input type="file" id="pgn" accept=".pgn,.txt,application/vnd.chess-pgn,application/x-chess-pgn,text/plain" multiple hidden>
           <p class="drop-line">
             chess.com does not publish games against its bots.
-            Export them and drop the PGN here.
+            Export them and drop the PGN here &mdash; any standard-chess PGN works,
+            including over-the-board games and other sites.
           </p>
           <button class="btn" type="button" id="pgn-btn">Upload bot games</button>
         </div>
         <p class="note" id="pgn-msg" hidden></p>
+        <p class="note who-row" id="pgn-who" hidden></p>
       </div>
 
       <div class="card" id="card-count" hidden>
@@ -234,6 +236,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=7"></script>
+  <script type="module" src="build-a-bot.js?v=10"></script>
 </body>
 </html>
