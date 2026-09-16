@@ -1,0 +1,441 @@
+/* Mirror Bot. Burke Bot's visual language, verbatim - same tokens, same three
+   faces, same card language - because this is a companion page and should feel
+   like one. Everything is sized in rem so the whole page scales with the window
+   from one root clamp.
+
+   Generated from the approved mockup; edit here, not there. */
+/* Burke Bot's own tokens and both its themes, verbatim - tournament green, the
+   club vinyl board.
+
+   DARK ON EVERY LOAD. There is deliberately no prefers-color-scheme branch and
+   nothing read from storage at boot, so a fresh visit is always dark whatever
+   the operating system or the last visit preferred. The toggle then stamps
+   data-theme="light" for the rest of that session. Because the default needs no
+   script, there is no flash of the wrong theme before it settles. */
+:root{
+  --bg:#162117; --surface:#1e2b1f; --surface-2:#26362a; --border:#3a4f3c;
+  --ink:#edf1e4; --ink-2:#aab8a5; --accent:#8fc57f; --accent-rgb:143,197,127;
+  --accent-dim:#527a4b; --q-good:#709f65; --sq-light:#e9ecd6; --sq-dark:#527a4b;
+  --warn:#d9a441;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f0f2e4; --surface:#fafbf2; --surface-2:#e7ecd8; --border:#c6d1b2;
+  --ink:#1e2a1d; --ink-2:#55684f; --accent:#3f5e3a; --accent-rgb:63,94,58;
+  --q-good:#486c42; --warn:#8a5e12;
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+/* Burke Bot's own scaling rule, verbatim: on a desktop the type tracks the
+   window so the whole page keeps one set of proportions, and because every
+   size on this page is in rem, everything grows and shrinks together. A
+   1440x900 laptop is the reference - 900 * 0.01778 = 16px, the browser
+   default - so that view is unchanged. Phones are left out on purpose. */
+@media (min-width:861px){
+  html{font-size:clamp(13px, min(1.78vh, 1.36vw), 24px)}
+}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:0.94rem; line-height:1.6;
+  padding:0 1.25rem 4.5rem;
+}
+.wrap{max-width:52rem; margin:0 auto}
+
+
+/* The header is a GRID, the way Burke Bot's is, rather than a wordmark with the
+   buttons absolutely positioned over it. Absolute positioning needs a fixed top
+   offset, and a fixed pixel offset inside a page whose type scales with the
+   window means the buttons drift away from the title as it grows. In a grid the
+   two are siblings in one row and stay tied at every size. */
+header{
+  display:grid; grid-template-columns:1fr auto;
+  align-items:center; column-gap:1.2rem;
+  padding-block:2.75rem .5rem;
+}
+.wordmark{grid-column:1; grid-row:1}
+.from{grid-column:1 / -1; grid-row:2}
+.wordmark{
+  font-family:"Alfa Slab One",Georgia,serif; font-weight:400;
+  /* no bottom margin: the grid row owns the spacing, and a margin here shifts
+     the wordmark's box centre below the buttons' so they stop lining up */
+  font-size:clamp(1.9rem,4.6vw,2.6rem); margin:0; letter-spacing:.01em;
+  text-wrap:balance;
+}
+.from{
+  margin:.9rem 0 0; font-size:.86rem; color:var(--ink-2);
+}
+.from a{color:var(--accent); text-decoration:none; border-bottom:1px solid transparent}
+.from a:hover{border-bottom-color:var(--accent)}
+.header-actions{
+  grid-column:2; grid-row:1; justify-self:end; align-self:center;
+  display:flex; align-items:center; gap:.5rem;
+}
+.icon-btn{
+  width:2.1rem; height:2.1rem; padding:0; display:flex; align-items:center;
+  justify-content:center; border:1px solid var(--border); border-radius:8px;
+  background:var(--surface); color:var(--ink-2); cursor:pointer;
+  transition:border-color .15s,color .15s;
+}
+.icon-btn:hover{border-color:var(--accent); color:var(--ink)}
+.icon-btn svg{width:1rem; height:1rem}
+/* Only the board view can be shared, so the control only exists there. It is
+   first in DOM order, which puts it at the left of the right-aligned group on a
+   desktop and at the far left once the row switches to space-between. */
+.share-bot{display:none}
+body[data-route="shared"] .share-bot{
+  display:inline-flex; align-items:center; gap:.4rem;
+  font:inherit; font-size:.82rem;
+  padding:0 .7rem; height:2.1rem;
+  border:1px solid var(--border); border-radius:8px;
+  background:var(--surface); color:var(--ink-2); cursor:pointer;
+  transition:border-color .15s, color .15s, background .15s;
+}
+body[data-route="shared"] .share-bot:hover{border-color:var(--accent); color:var(--ink)}
+body[data-route="shared"] .share-bot.done{
+  color:var(--accent); border-color:var(--accent);
+  background:rgba(var(--accent-rgb),.15); background-clip:padding-box;
+  transition:none;
+}
+.share-bot svg{flex:none; width:.9rem; height:.9rem}
+.share-bot.done svg polyline{
+  stroke-dasharray:100; stroke-dashoffset:0;
+  animation:tick-write 260ms cubic-bezier(.65,0,.35,1);
+}
+@media (max-width:640px){
+  /* Share goes hard left, the two utilities stay together on the right.
+     space-between would distribute all THREE evenly and leave the sound button
+     stranded mid-row, so instead the row packs from the left and a single auto
+     margin on the first icon pushes that pair - and only that pair - right. */
+  body[data-route="shared"] .header-actions{
+    grid-column:1 / -1; justify-self:stretch; justify-content:flex-start;
+  }
+  body[data-route="shared"] .share-bot + .icon-btn{margin-left:auto}
+}
+
+.card{
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:1.05rem 1.15rem; margin-top:1.15rem;
+}
+.card h2{
+  font-family:Fraunces,Georgia,serif; font-weight:600; font-size:1.06rem;
+  margin:0 0 .15rem;
+}
+.card .sub{color:var(--ink-2); font-size:.86rem; margin:0 0 1rem}
+
+label.lbl{
+  display:block; font-size:.72rem; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--ink-2); margin-bottom:.4rem;
+}
+/* Setup centres its controls; only each section's own heading and description
+   stay left, so the eye still has a fixed edge to read down. */
+#setup .card > *:not(h2):not(.sub){text-align:center}
+#setup .toggles{justify-content:center}
+/* The assurances sit ABOVE the button: read the promises, then act on them.
+   Both are centred as blocks while the list keeps its own left-aligned text, so
+   the ticks form a straight column instead of ragging around the centre. */
+#setup .actions{
+  display:flex; flex-direction:column; align-items:center;
+  gap:1.15rem; margin-top:2.3rem;   /* clear of the tick row, not just the track */
+}
+#setup .slider-head{justify-content:flex-start}
+#setup .readout{text-align:left}
+#setup .acct .lbl{text-align:center}
+#setup .field{justify-content:center}
+#setup .field input{text-align:center; flex:0 1 auto; width:auto; max-width:100%}
+.accounts{display:grid; grid-template-columns:1fr 1fr; gap:.85rem; max-width:34rem; margin:0 auto}
+.acct{
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:10px; padding:.7rem .75rem;
+}
+.acct .lbl{color:var(--accent); margin-bottom:.45rem}
+@media (max-width:560px){ .accounts{grid-template-columns:1fr} }
+.field{
+  display:flex; align-items:center; gap:.5rem; background:var(--bg);
+  border:1px solid var(--border); border-radius:7px; padding:.45rem .65rem;
+}
+.field:focus-within{border-color:var(--accent)}
+.field input{
+  flex:1; min-width:0; border:0; background:none; color:var(--ink);
+  font:inherit; font-size:.94rem; outline:none;
+}
+.field input::placeholder{color:var(--ink-2); opacity:.62}
+.field .ok{color:var(--accent); font-size:.8rem; white-space:nowrap}
+
+.speeds{display:flex; flex-wrap:wrap; justify-content:center; gap:.55rem; margin-top:.3rem}
+.speed{
+  width:10.5rem; display:flex; align-items:center; gap:.55rem; cursor:pointer;
+  border:1px solid var(--border); border-radius:8px; padding:.5rem .65rem;
+  background:var(--bg); transition:border-color .15s,background .15s;
+}
+.speed:hover{border-color:var(--accent-dim)}
+.speed input{accent-color:var(--accent); width:1rem; height:1rem; margin:0; cursor:pointer}
+.speed .nm{font-size:.9rem}
+.speed .ct{margin-left:auto; color:var(--ink-2); font-size:.8rem; font-variant-numeric:tabular-nums}
+.speed.off .nm,.speed.off .ct{opacity:.55}
+
+.toggles{display:flex; flex-wrap:wrap; gap:1.1rem; margin-top:1.1rem}
+.tg{display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.9rem}
+.tg input{accent-color:var(--accent); width:1rem; height:1rem; margin:0; cursor:pointer}
+
+/* the slider: two numbers that move together */
+.slider-head{display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap}
+.readout{font-size:.95rem; font-variant-numeric:tabular-nums}
+.readout b{color:var(--ink); font-weight:500}
+.readout .sep{color:var(--ink-2); margin:0 .45rem}
+.readout .q{font-weight:500}
+.q.good{color:var(--q-good)}
+.q.best{color:var(--accent)}
+.q.ok{color:var(--ink)}
+.q.rough{color:var(--warn)}
+.q.bad{color:#d98c73}
+input[type=range]{
+  width:100%; accent-color:var(--accent); margin:.85rem 0 .3rem; cursor:pointer;
+}
+.ticks{display:flex; justify-content:space-between; font-size:.72rem; color:var(--ink-2)}
+
+.btn{
+  font:inherit; font-size:1.06rem; padding:.55rem 1.05rem; border-radius:8px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink);
+  cursor:pointer; transition:border-color .15s,background .15s,transform .1s;
+}
+.btn:hover{border-color:var(--accent); background:var(--surface-2); transform:translateY(-1px)}
+.btn.primary{border-color:var(--accent); color:var(--accent)}
+/* A disabled action must not look like an available one. Without this the
+   "Build my bot!" button kept its accent border and hover lift while being
+   genuinely unclickable, which reads as a broken page rather than a blocked one. */
+.btn:disabled{
+  opacity:.45; cursor:not-allowed;
+  border-color:var(--border); color:var(--ink-2);
+}
+.btn:disabled:hover{
+  background:var(--surface); border-color:var(--border);
+  color:var(--ink-2); transform:none;
+}
+
+.actions{margin-top:1.2rem; display:flex; gap:2.2rem; align-items:center; flex-wrap:wrap}
+.assure{
+  list-style:none; margin:0; padding:0; text-align:left;
+  font-size:.74rem; line-height:1.5; color:var(--ink-2);
+}
+.assure li{padding-left:1.05rem; position:relative}
+.assure li::before{
+  content:"\2713"; position:absolute; left:0; color:var(--accent); font-size:.8rem;
+}
+
+/* the shared-link landing page: Burke Bot's board column, nothing else.
+   The eval gutter is carried over so the player rows, the board and the resign
+   button all line up on the same left edge the board has. */
+/* On the shared route the page's own wordmark goes, but the sound and theme
+   controls stay - they are utilities, not branding, and the page renders in
+   both themes. The header collapses to just enough room to hold them. */
+body[data-route="shared"] .wordmark,
+body[data-route="shared"] .from{display:none}
+body[data-route="shared"] header{padding-block:1rem 0}
+body[data-route="shared"] .shared-top{padding-block:.2rem 1.1rem}
+.from-shared{margin:.3rem 0 0; font-size:.86rem; color:var(--ink-2)}
+.from-shared a{color:var(--accent); text-decoration:none; border-bottom:1px solid transparent}
+.from-shared a:hover{border-bottom-color:var(--accent)}
+/* No percentage lives in these custom properties on purpose: a percentage
+   inside one resolves against whichever element reads it, so the board row and
+   the resign row were each computing a different width from the same variable.
+   The CARD caps the width once; everything inside simply fills it. */
+/* 41rem is the width at which the "Same machinery as Burke Bot..." line fits
+   on one line; measured, not guessed. The footer borrows it so its rule and
+   its copyright line land on the cards' own two edges. */
+:root{--shared-card:41rem}
+#shared{
+  --eval-w:3.85rem; --eval-bar-x:2.41rem;
+  --colmax:calc(var(--shared-card) - 2.3rem);
+}
+#shared .card{
+  width:min(var(--shared-card), 100%);
+  margin-left:auto; margin-right:auto;
+}
+body[data-route="shared"] footer{
+  width:min(var(--shared-card), 100%); margin-left:auto; margin-right:auto;
+}
+.play-card{padding-bottom:1.2rem}
+
+/* The board, its player rows, the eval gutter and the resign button all share
+   one width and one centred axis, so the whole column reads as a single object. */
+#shared .player,
+#shared .board-wrap,
+#shared .controls-row{width:100%}
+.player{
+  display:flex; align-items:center; gap:.55rem;
+  padding-left:var(--eval-w); min-height:2.15rem;
+}
+.player:first-of-type{margin-bottom:.5rem}
+.avatar{
+  flex:none; width:2rem; height:2rem; border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--surface-2); border:1px solid var(--border); color:var(--ink-2);
+}
+.avatar.bot{
+  background:var(--sq-dark); border-color:var(--sq-dark);
+  color:var(--sq-light); font-size:1.3rem; line-height:1;
+}
+.avatar.human svg{width:62%; height:62%}
+.pname{font-size:.92rem; font-weight:500; color:var(--ink); white-space:nowrap}
+.pname .rat{font-weight:400; color:var(--ink-2); font-size:.86em}
+.caps{
+  margin-left:.35rem; color:var(--ink-2); font-size:1.2rem; line-height:1;
+  /* IBM Plex Mono has no chess glyphs, so these need an explicit fallback or
+     they land in whatever the system picks and render as blobs */
+  font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2",serif;
+  letter-spacing:-.07em;
+}
+
+.board-wrap{position:relative; padding-left:var(--eval-w)}
+.eval-num{
+  position:absolute; left:-.42rem; width:2.52rem; top:50%; transform:translateY(-50%);
+  text-align:right; font-size:.82rem; font-weight:700; color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.eval-bar{
+  position:absolute; left:var(--eval-bar-x); top:0; bottom:0; width:.94rem;
+  border-radius:5px; overflow:hidden; background:#23261f; border:1px solid var(--border);
+}
+.eval-fill{position:absolute; left:0; right:0; bottom:0; height:54%; background:var(--sq-light)}
+.board{
+  width:100%; aspect-ratio:1; display:grid;
+  grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr);
+  border:1px solid var(--border); border-radius:8px; overflow:hidden;
+}
+.sq{display:flex; align-items:center; justify-content:center; font-size:min(2rem,5vw); line-height:1}
+.sq.l{background:var(--sq-light)} .sq.d{background:var(--sq-dark)}
+.sq.w{color:#f8f8f2; text-shadow:0 0 1px rgba(0,0,0,.65)}
+.sq.b{color:#22271f}
+:root[data-theme="light"] .board-overlay{background:rgba(240,242,228,.76)}
+.board-overlay{
+  position:absolute; inset:0 0 0 var(--eval-w);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:.9rem; background:rgba(22,33,23,.72); border-radius:8px;
+}
+.ov-kicker{
+  margin:0; font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--ink);
+}
+.ov-buttons{display:flex; gap:.7rem; flex-wrap:wrap; justify-content:center}
+.ov-title{
+  font-family:Fraunces,Georgia,serif; font-weight:600; font-size:1.4rem;
+  margin:0; color:var(--ink);
+}
+.ov-line{margin:0; font-size:.9rem; color:var(--ink-2); text-align:center; max-width:18rem}
+@media (max-width:520px){
+  /* the overlay buttons were spanning the whole board, same as on Burke Bot */
+  .board-overlay .btn{font-size:.82rem; padding:.45rem .6rem}
+  .ov-buttons{gap:.5rem}
+}
+.controls-row{
+  display:flex; justify-content:flex-end; padding-left:var(--eval-w); margin-top:.9rem;
+}
+.promo{margin-top:1.15rem}
+.shared-top{text-align:center}
+.card .sub b{color:var(--ink); font-weight:500}
+
+/* the shared-link landing page */
+.eyebrow{
+  font-size:.7rem; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--accent); margin:0 0 .35rem;
+}
+.promo{border-color:var(--accent-dim)}
+.promo h2{font-family:"Alfa Slab One",Georgia,serif; font-weight:400; font-size:1.35rem}
+
+/* building */
+.recap{
+  display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+  font-size:.86rem; color:var(--ink-2); padding-bottom:.9rem;
+  border-bottom:1px solid var(--border); margin-bottom:1rem;
+}
+.recap b{color:var(--ink); font-weight:500}
+.bar{height:7px; border-radius:4px; background:var(--surface-2); overflow:hidden; margin:.9rem 0 .55rem}
+.bar span{display:block; height:100%; background:var(--accent); border-radius:4px; width:62%}
+.prog{display:flex; justify-content:space-between; font-size:.84rem; color:var(--ink-2); font-variant-numeric:tabular-nums}
+
+/* result */
+.stats{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:.9rem;
+  margin:.2rem 0 1.15rem;
+}
+@media (max-width:560px){ .stats{grid-template-columns:1fr} }
+.stat{
+  background:var(--bg); border:1px solid var(--border); border-radius:10px;
+  padding:1rem .9rem; text-align:center;
+  display:flex; flex-direction:column; justify-content:center; gap:.15rem;
+  min-height:5.6rem;
+}
+.stat .k{font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2)}
+/* a name rather than a figure, so it takes a readable size instead of the
+   display size the two numeric tiles use */
+.stat .v.text{font-size:1.32rem; line-height:1.25}
+.stat .v{
+  font-family:Fraunces,Georgia,serif; font-weight:600; font-size:1.65rem;
+  line-height:1.15; margin-top:.2rem; font-variant-numeric:tabular-nums;
+}
+.stat .n{font-size:.76rem; color:var(--ink-2); margin-top:.15rem}
+/* One shared height drives both, because aspect-ratio cannot feed back into a
+   flex item's main size - the width is resolved from content before the cross
+   axis stretches, so the button would come out tall and thin. */
+.linkrow{display:flex; gap:.5rem; align-items:stretch; --h:2.7rem}
+.linkbox{
+  flex:1; min-width:0; height:var(--h);
+  display:flex; align-items:center; justify-content:center;
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:8px; padding:0 .7rem; font-size:.82rem; color:var(--ink-2);
+  overflow:hidden; white-space:nowrap;
+}
+.linkbox span{overflow:hidden; text-overflow:ellipsis}
+/* Burke Bot's copy control, carried over exactly - the wash and ring sit on the
+   button's existing perimeter, and the tick draws itself on from the short tail. */
+.copy-btn{
+  flex:none;
+  width:var(--h,1.86rem); height:var(--h,1.86rem); padding:0;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border); border-radius:7px;
+  background:none; color:var(--ink-2); cursor:pointer;
+  transition:color .15s, border-color .15s, background .15s;
+}
+.copy-btn svg{flex:none; width:1.04rem; height:1.04rem}
+.copy-btn:hover{color:var(--ink); border-color:var(--border); background:var(--surface-2)}
+.copy-btn.done svg{width:1.26rem; height:1.26rem}
+.copy-btn.done{
+  color:var(--accent);
+  background:rgba(var(--accent-rgb),.15); background-clip:padding-box;
+  border-color:var(--accent);
+  transition:none;
+}
+@keyframes tick-write{from{stroke-dashoffset:100}}
+.copy-btn.done svg polyline{
+  stroke-dasharray:100; stroke-dashoffset:0;
+  animation:tick-write 260ms cubic-bezier(.65,0,.35,1);
+}
+@media (prefers-reduced-motion:reduce){ .copy-btn.done svg polyline{animation:none} }
+footer{margin-top:2.4rem; padding-top:1.1rem; border-top:1px solid var(--border);
+  color:var(--ink-2); font-size:.82rem}
+footer a{color:var(--accent); text-decoration:none}
+[hidden]{display:none !important}
+@media (prefers-reduced-motion:reduce){ *{transition:none !important; animation:none !important} }
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* ---- pieces the live page needs that the mockup did not ---- */
+
+/* Boot veil: hold the page until fonts and the board have settled so it fades
+   in as one unit instead of reflowing in front of the reader. mirror.js lifts
+   it; index.html carries a 3s fallback so it can never stick. */
+html.booting body{opacity:0}
+body{transition:opacity .18s ease}
+@media (prefers-reduced-motion:reduce){ body{transition:none} }
+
+/* one-line messages under a card's controls - lookup failures, the mobile cap */
+.note{
+  margin:.9rem 0 0; font-size:.8rem; color:var(--ink-2); text-align:center;
+}
+.note.bad{color:#d98c73}
+.note.warn{color:var(--warn)}
+
+.foot-inner{color:var(--ink-2)}
+
+/* "Play Burke Bot" is an anchor, not a button, so it needs the button's box */
+a.btn{display:inline-block; text-decoration:none}

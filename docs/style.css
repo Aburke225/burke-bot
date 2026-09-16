@@ -177,6 +177,9 @@ body {
 .board { width: 100%; aspect-ratio: 1 / 1; } /* reserve the square before the svg exists */
 
 .controls { display: flex; gap: 0.7rem; justify-content: flex-start; }
+/* The Mirror Bot entry point. It navigates, so it is an anchor rather than a
+   button, which means it needs the box .btn otherwise gets for free. */
+#build-btn { display: inline-flex; align-items: center; text-decoration: none; }
 .btn {
   font: inherit;
   font-size: 1.06rem;
@@ -614,6 +617,8 @@ footer a { color: var(--ink-2); }
 
 /* phones: the eval gutter slims down so the board keeps its width */
 @media (max-width: 520px) {
+  /* on a phone the entry point sits left of Resign */
+  #build-btn { order: -1; }
   /* "Back to the game" / "Yes, resign" and "Play as White" / "Play as Black"
      were each spanning the full width of the board */
   #confirm .btn, #pick .btn { font-size: 0.82rem; padding: 0.45rem 0.6rem; }

@@ -264,6 +264,14 @@ export function packMeta(meta) {
     if (m.r != null) o.r = m.r
     if (m.g != null) o.g = m.g
     if (m.v != null) o.v = m.v
+    // The measured levers. Without these a shared bot falls back to play.js's
+    // defaults - pool depth 5, horizon 2, MultiPV 20 - which is a 1300-rated
+    // player's settings applied to everyone. They cost ~28 URL characters
+    // against an 1800 budget, so carrying them is close to free.
+    if (m.pd != null) o.pd = m.pd
+    if (m.hd != null) o.hd = m.hd
+    if (m.mp != null) o.mp = m.mp
+    if (m.t != null) o.t = m.t
     return te.encode(JSON.stringify(o))
   }
   let name = m.u == null ? "" : String(m.u)

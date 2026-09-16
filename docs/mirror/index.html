@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mirror Bot</title>
+  <script>
+    // Boot veil, the same pattern the parent site uses: hide the page until the
+    // layout settles (fonts swapping in, the board svg inflating) so it fades in
+    // as one unit. mirror.js lifts it; this timeout is the never-stuck fallback.
+    // Deliberately NOT inside requestAnimationFrame - rAF does not fire in a
+    // hidden tab, which once left the veil up for three seconds.
+    document.documentElement.classList.add('booting');
+    setTimeout(function () { document.documentElement.classList.remove('booting'); }, 3000);
+  </script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#9822;</text></svg>">
+  <meta name="description" content="Build a chess bot that plays like you, from your own chess.com and lichess games. Runs entirely in your browser.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Alfa+Slab+One&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
+  <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
+  <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="header-actions">
+        <button class="share-bot" type="button" id="share-bot">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Share this bot</span>
+        </button>
+        <button class="icon-btn" type="button" id="sound-toggle" aria-label="Mute sounds" title="Mute sounds"></button>
+        <button class="icon-btn" type="button" id="theme-toggle" aria-label="Switch to light mode" title="Switch to light mode"></button>
+      </div>
+      <h1 class="wordmark">Mirror Bot</h1>
+      <p class="from">Same machinery as <a href="../">Burke&nbsp;Bot</a> &mdash; pointed at your games instead of mine.</p>
+    </header>
+
+    <!-- ============ SETUP ============ -->
+    <section id="setup">
+      <div class="card">
+        <h2>Username</h2>
+        <p class="sub">Public games only. Give one account or both &mdash; both trains on more.</p>
+        <div class="accounts">
+          <div class="acct">
+            <label class="lbl" for="cc">chess.com</label>
+            <div class="field">
+              <input id="cc" type="text" placeholder="username" spellcheck="false" autocomplete="off" autocapitalize="off">
+              <span class="ok" id="cc-ok" hidden>&#10003;</span>
+            </div>
+          </div>
+          <div class="acct">
+            <label class="lbl" for="li">lichess</label>
+            <div class="field">
+              <input id="li" type="text" placeholder="username" spellcheck="false" autocomplete="off" autocapitalize="off">
+              <span class="ok" id="li-ok" hidden>&#10003;</span>
+            </div>
+          </div>
+        </div>
+        <p class="note" id="acct-msg" hidden></p>
+      </div>
+
+      <div class="card" id="card-speeds" hidden>
+        <h2>Game types</h2>
+        <p class="sub">Counts come straight from your profile, before anything downloads.</p>
+        <div class="speeds" id="speeds"></div>
+        <div class="toggles">
+          <label class="tg"><input type="checkbox" id="rated" checked> Rated games only</label>
+          <label class="tg" id="bots-wrap" hidden><input type="checkbox" id="bots"> Include games against bots</label>
+        </div>
+      </div>
+
+      <div class="card" id="card-count" hidden>
+        <h2>Number of games</h2>
+        <p class="sub">More games is a more personal bot and a longer wait.</p>
+        <div id="slider-wrap">
+          <div class="slider-head"><span class="readout" id="readout"></span></div>
+          <input type="range" id="games" min="10" max="400" value="250" step="1"
+                 aria-label="Number of games to learn from">
+          <div class="ticks"><span>10</span><span id="tick-max">all</span></div>
+        </div>
+        <p class="note" id="count-msg" hidden></p>
+        <div class="actions">
+          <ul class="assure">
+            <li>Nothing is uploaded</li>
+            <li>Your games never leave this tab</li>
+            <li>Everything runs on your machine</li>
+          </ul>
+          <button class="btn primary" type="button" id="build">Build my bot!</button>
+        </div>
+        <p class="note" id="mobile-note" hidden></p>
+      </div>
+    </section>
+
+    <!-- ============ BUILDING ============ -->
+    <section id="building" hidden>
+      <div class="card">
+        <div class="recap" id="recap-building"></div>
+        <h2>Reading your games</h2>
+        <p class="sub">Do not close this tab, but feel free to browse others.</p>
+        <div class="bar"><span id="fill" style="width:0%"></span></div>
+        <div class="prog"><span id="phase">Starting&hellip;</span><span id="left"></span></div>
+        <div class="actions" style="margin-top:1.1rem; justify-content:flex-start">
+          <button class="btn" type="button" id="cancel">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RESULT ============ -->
+    <section id="result" hidden>
+      <div class="card">
+        <div class="recap" id="recap-result"></div>
+        <h2 id="bot-name">Your Bot</h2>
+        <p class="sub">Built from your games, playing on your machine.</p>
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Your bot rating</div>
+            <div class="v" id="st-rating">&mdash;</div>
+          </div>
+          <div class="stat">
+            <div class="k">Plays your move</div>
+            <div class="v" id="st-top1">&mdash;</div>
+            <div class="n">of the time</div>
+          </div>
+          <div class="stat">
+            <div class="k">Favorite opening</div>
+            <div class="v text" id="st-opening">&mdash;</div>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:0; justify-content:center">
+          <button class="btn primary" type="button" id="play-it">Play it</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Send it to someone</h2>
+        <p class="sub">The whole bot is inside the link. Nothing is stored anywhere.</p>
+        <div class="linkrow">
+          <div class="linkbox"><span id="share-url"></span></div>
+          <button class="copy-btn" type="button" id="copy-link"
+                  aria-label="Copy the link" title="Copy the link"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ THE BOARD ============ -->
+    <section id="shared" hidden>
+      <div class="card play-card">
+        <div class="shared-top">
+          <p class="eyebrow">Someone sent you their bot</p>
+          <p class="from-shared" id="from-shared"></p>
+        </div>
+
+        <div class="player">
+          <span class="avatar bot" aria-hidden="true">&#9822;</span>
+          <span class="pname" id="nm-top">&mdash;</span>
+          <span class="caps" id="cap-top"></span>
+        </div>
+
+        <div class="board-wrap">
+          <span class="eval-num" id="eval-num" hidden></span>
+          <div class="eval-bar" id="eval-bar" hidden><div class="eval-fill" id="eval-fill"></div></div>
+          <div class="board" id="board"></div>
+          <div class="board-overlay" id="spick">
+            <p class="ov-kicker">new game</p>
+            <div class="ov-buttons">
+              <button class="btn" type="button" id="pick-white">Play as White</button>
+              <button class="btn" type="button" id="pick-black">Play as Black</button>
+            </div>
+          </div>
+          <div class="board-overlay" id="sconfirm" hidden>
+            <p class="ov-kicker">are you sure?</p>
+            <div class="ov-buttons">
+              <button class="btn" type="button" id="resign-no">Back to the game</button>
+              <button class="btn" type="button" id="resign-yes">Yes, resign</button>
+            </div>
+          </div>
+          <div class="board-overlay" id="send" hidden>
+            <p class="ov-title" id="end-title"></p>
+            <p class="ov-line" id="end-line"></p>
+            <button class="btn" type="button" id="again">Play again</button>
+          </div>
+        </div>
+
+        <div class="player">
+          <span class="avatar human" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>
+          </span>
+          <span class="pname">Challenger</span>
+          <span class="caps" id="cap-bot"></span>
+        </div>
+
+        <div class="controls-row">
+          <button class="btn" type="button" id="resign-btn">Resign</button>
+        </div>
+      </div>
+
+      <div class="card promo">
+        <p class="eyebrow">The original</p>
+        <h2>Burke&nbsp;Bot</h2>
+        <p class="sub">The bot this one is built from. Andrew Burke trained it on every chess game
+          he has ever played &mdash; <b id="bb-games">&mdash;</b> games,
+          <b id="bb-book">&mdash;</b> opening positions,
+          <b id="bb-feats">&mdash;</b> measured habits.</p>
+        <div class="actions" style="margin-top:.2rem; justify-content:center">
+          <a class="btn primary" href="../">Play Burke Bot</a>
+          <button class="btn" type="button" id="build-own">Build a bot yourself!</button>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="foot-inner">&copy; 2026 <a href="https://aburke225.github.io">Andrew Burke</a></div>
+    </footer>
+  </div>
+
+  <script type="module" src="mirror.js?v=1"></script>
+</body>
+</html>
