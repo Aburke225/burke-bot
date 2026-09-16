@@ -232,7 +232,14 @@ input[type=range]{
    both themes. The header collapses to just enough room to hold them. */
 body[data-route="shared"] .wordmark,
 body[data-route="shared"] .from{display:none}
-body[data-route="shared"] header{padding-block:1rem 0}
+/* On the shared route the cards are narrower than the page and centred, so the
+   header has to take the same width or the theme button's right edge sits out
+   past the boxes beneath it. The footer already borrows --shared-card for the
+   same reason; this puts all three on one pair of edges. */
+body[data-route="shared"] header{
+  padding-block:1rem 0;
+  width:min(var(--shared-card), 100%); margin-left:auto; margin-right:auto;
+}
 body[data-route="shared"] .shared-top{padding-block:.2rem 1.1rem}
 .from-shared{margin:.3rem 0 0; font-size:.86rem; color:var(--ink-2)}
 .from-shared a{color:var(--accent); text-decoration:none; border-bottom:1px solid transparent}
