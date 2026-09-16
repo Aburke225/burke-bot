@@ -543,7 +543,7 @@ function renderIdentity() {
   // the wrong side does not fail, it fits the opponent's style and every
   // number still looks right.
   const lead = u.source === "ambiguous"
-    ? `Could not tell which player is you &mdash; reading as <b>${escapeHtml(u.identity)}</b>.`
+    ? `Could not detect which player is you &mdash; reading as <b>${escapeHtml(u.identity)}</b>.`
     : `Read as <b>${escapeHtml(u.identity)}</b>'s games.`
   box.classList.toggle("guess", u.source === "ambiguous")
   box.innerHTML =
