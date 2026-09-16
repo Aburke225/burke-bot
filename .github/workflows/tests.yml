@@ -10,6 +10,10 @@ on:
     paths:
       - "pipeline/**"
       - "docs/app.js"
+      # the THIRD copy of the v9 feature contract. parity_v9.mjs checks it
+      # against the same python vectors as app.js, but the guard is only real
+      # if a change to it actually triggers the run.
+      - "docs/mirror/v9.js"
       - ".github/workflows/tests.yml"
   pull_request:
   workflow_dispatch:

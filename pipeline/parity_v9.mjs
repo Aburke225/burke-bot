@@ -1,4 +1,4 @@
-// Prove the two halves of the v9 contract agree.
+// Prove every copy of the v9 contract agrees.
 //
 // pipeline/features_v9.py and the v9 block in docs/app.js must produce
 // identical vectors for the same position, or the bot plays a different game
@@ -6,6 +6,12 @@
 // here produces legal, plausible, WRONG moves with nothing in the training
 // metrics catching it - so this runs the REAL source out of app.js rather than
 // a copy, extracted by brace-matching.
+//
+// THERE IS NOW A THIRD COPY: docs/mirror/v9.js, the module the Mirror Bot page
+// uses to build a bot from a stranger's games. It is checked here against the
+// same python-generated vectors, so one run proves all three agree. If it is
+// absent the check is skipped and the original two-way guarantee is unchanged -
+// this file must never start failing because of a folder it does not require.
 //
 //   node pipeline/parity_v9.mjs /tmp/v9_parity_cases.json
 import { readFileSync } from "fs"
@@ -47,10 +53,39 @@ const src = [...consts.map(c => extract(c, "const")), ...fns.map(f => extract(f)
 const chess = new Chess()
 const api = new Function("chess", src)(chess)
 
+// The third copy is a real ES module with explicit exports, so it imports
+// rather than needing the brace-extraction above.
+let mirror = null
+try {
+  mirror = await import("../docs/mirror/v9.js")
+} catch (e) {
+  if (e.code !== "ERR_MODULE_NOT_FOUND") throw e
+}
+
+// docs/mirror/v9.js takes the previous-move facts explicitly instead of digging
+// them out of module state the way app.js does. Passing nulls when history DOES
+// exist silently changes features 12, 13, 40, 43 and 44 and raises no error, so
+// this mapping is the load-bearing part of the third-copy check.
+function mirrorContext() {
+  const hist = chess.history({ verbose: true })
+  const oppLast = hist.length ? hist[hist.length - 1] : null
+  const myLast = hist.length > 1 ? hist[hist.length - 2] : null
+  const mine = myLast && myLast.color === chess.turn() ? myLast : null
+  return mirror.makeContext(
+    chess,
+    mine ? mine.to : null,
+    mine ? mine.from : null,
+    oppLast && oppLast.captured ? oppLast.to : null,
+    oppLast ? oppLast.to : null,
+  )
+}
+
 const cases = JSON.parse(readFileSync(process.argv[2], "utf8"))
 let checked = 0, bad = 0
 const perFeature = new Array(api.V9_N).fill(0)
-let lastKey = null, ctx = null
+let lastKey = null, ctx = null, mctx = null
+let mChecked = 0, mBad = 0
+const mPerFeature = new Array(api.V9_N).fill(0)
 
 for (const c of cases) {
   // a case is either a move list (history intact, so the context has a real
@@ -68,6 +103,7 @@ for (const c of cases) {
       }
     }
     ctx = api.decisionContextV9()
+    if (mirror) mctx = mirrorContext()
     lastKey = key
   }
   const x = api.moveFeaturesV9(c.uci, ctx, c.sh, c.bestSh, c.rank)
@@ -78,6 +114,29 @@ for (const c of cases) {
     if (Math.abs(x[k] - c.x[k]) > 1e-6) {
       perFeature[k]++
       mismatch = true
+    }
+  }
+  if (mirror) {
+    const mx = mirror.features(chess, c.uci, mctx, c.sh, c.bestSh, c.rank)
+    mChecked++
+    if (!mx) {
+      mBad++
+      console.log("MIRROR NULL vector for", c.uci)
+    } else {
+      let mm = false
+      for (let k = 0; k < api.V9_N; k++) {
+        if (Math.abs(mx[k] - c.x[k]) > 1e-6) { mPerFeature[k]++; mm = true }
+      }
+      if (mm) {
+        mBad++
+        if (mBad <= 3) {
+          const d = []
+          for (let k = 0; k < api.V9_N; k++) {
+            if (Math.abs(mx[k] - c.x[k]) > 1e-6) d.push(`${k}: mirror ${mx[k]} vs py ${c.x[k]}`)
+          }
+          console.log(`MIRROR MISMATCH ${c.uci} in ${c.fen || c.moves.length + " plies"} -> ${d.join(", ")}`)
+        }
+      }
     }
   }
   if (mismatch) {
@@ -98,3 +157,18 @@ if (offenders.length) {
 } else {
   console.log("every feature agrees to 1e-6")
 }
+
+if (!mirror) {
+  console.log("docs/mirror/v9.js absent - third copy not checked")
+} else {
+  console.log(`\ndocs/mirror/v9.js: ${mChecked} vectors checked, ${mBad} mismatching`)
+  const mo = mPerFeature.map((n, k) => [k, n]).filter(([, n]) => n > 0)
+  if (mo.length) {
+    console.log("mirror mismatches by feature:", mo.map(([k, n]) => `${k}:${n}`).join("  "))
+  } else {
+    console.log("the third copy agrees with python to 1e-6")
+  }
+}
+
+// a non-zero exit so the python wrapper cannot pass on a string match alone
+process.exitCode = bad || mBad ? 1 : 0
