@@ -421,10 +421,15 @@ body[data-route="shared"] footer{
 #building .recap, #result .recap{font-size:.88rem}
 #building .card > .sub, #result .card > .sub{font-size:.88rem}
 .recap{
-  display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
-  font-size:.86rem; color:var(--ink-2); padding-bottom:.9rem;
+  /* Flowing text, not a flex row. As a flex container each fact was an item and
+     the separators were items too, so a wrap could strand a lone dot at the end
+     of a line. Text wrapping plus a non-breaking space before each dot keeps
+     every separator attached to the phrase it follows. */
+  font-size:.86rem; color:var(--ink-2); line-height:1.7;
+  padding-bottom:.9rem;
   border-bottom:1px solid var(--border); margin-bottom:1rem;
 }
+.recap .sep{opacity:.55}
 .recap b{color:var(--ink); font-weight:500}
 /* an unstyled <a> renders in the browser's blue, which is the one colour on the
    page that belongs to no theme. No underline at all - not on hover either;

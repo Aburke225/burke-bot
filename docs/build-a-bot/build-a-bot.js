@@ -738,6 +738,16 @@ function estimateSeconds(n) {
   return OVERHEAD_SECS + (n * DECISIONS_PER_GAME * ms * LOOP_FACTOR) / 1000
 }
 
+// A non-breaking space BEFORE the dot and an ordinary one after it. The recap
+// can now run to two lines, and this is what decides where they break: the dot
+// is glued to the phrase it follows, so a wrapped line can end "rapid, daily ·"
+// but can never begin with an orphaned separator.
+const SEP = "&nbsp;<span class=\"sep\">&middot;</span> "
+
+function joinBits(bits) {
+  return bits.join(SEP)
+}
+
 function prettyTime(secs) {
   if (secs < 60) return Math.max(1, Math.round(secs)) + "s"
   const m = Math.floor(secs / 60), s = Math.round(secs % 60)
@@ -875,10 +885,21 @@ async function build() {
   // "how long is this going to take" is the live question. It is the figure the
   // setup page quoted, frozen - a number that keeps revising itself while you
   // watch is a worse answer than a slightly wrong one that holds still.
-  $("recap-building").innerHTML =
-    `<b>${cap}</b> <span>&middot;</span> <b>${n}</b> games <span>&middot;</span> ` +
-    ($("rated").checked ? "rated only" : "rated and casual") +
-    `<span class="eta"><span>&middot;</span> about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b> to build</span>`
+  // Every choice that shaped this build, not just the rated one. Someone who
+  // ticked three speeds and uploaded a pile of bot games was being told only
+  // "rated and casual", which described the least of what they did.
+  const chosen = SPEED_ORDER
+    .filter((sp) => state.speeds.has(sp))
+    .map((sp) => (SPEED_LABEL[sp] || sp).toLowerCase())
+  const uploaded = $("bots").checked ? state.upload.games.length : 0
+  const bits = [`<b>${cap}</b>`, `<b>${n}</b> games`]
+  if (chosen.length) bits.push(chosen.join(", "))
+  bits.push($("rated").checked ? "rated only" : "rated and casual")
+  if (uploaded) bits.push(`plus <b>${uploaded.toLocaleString("en-US")}</b> bot games`)
+  else if ($("bots").checked) bits.push("bot games included")
+
+  $("recap-building").innerHTML = joinBits(bits) +
+    `<span class="eta">${SEP}about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b> to build</span>`
   state.buildSize = n
   state.scoreT0 = null
   resetSteps()

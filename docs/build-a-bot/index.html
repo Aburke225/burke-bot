@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
   <div class="wrap">
@@ -106,12 +106,12 @@
           <ul class="assure">
             <!-- Was "Nothing is uploaded", which stopped reading as reassurance
                  the moment a button on this same card said "Upload bot games".
-                 Still true - every request this page makes is a GET pulling
-                 something IN, and a dropped PGN is read by the browser and never
-                 sent - but a promise that appears to contradict the control next
-                 to it is not a promise anyone believes. Naming the server says
-                 the same thing without the collision. -->
-            <li>Nothing is sent to a server</li>
+                 The worry a person actually has when they hand over a file is
+                 whether it is being kept, so the line answers that instead.
+                 Checked rather than assumed: the only thing this page writes to
+                 the browser is a sound on/off flag, and no games, username or
+                 file contents are persisted or transmitted anywhere. -->
+            <li>None of your data is saved</li>
             <li>Your games never leave this tab</li>
             <li>Everything runs on your machine</li>
           </ul>
@@ -247,6 +247,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=30"></script>
+  <script type="module" src="build-a-bot.js?v=31"></script>
 </body>
 </html>
