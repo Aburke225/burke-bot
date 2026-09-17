@@ -1232,7 +1232,9 @@ async function finish(bot, accounts) {
   if (eta) eta.remove()
   $("recap-result").innerHTML = recap.innerHTML +
     ` <span>&middot;</span> <a href="#" id="again-link">build another bot</a>`
-  $("st-rating").textContent = bot.stats.botRating ? bot.stats.botRating.toLocaleString("en-US") : "—"
+  // No thousands separator on a rating anywhere: it is a point on a scale, not
+  // a count, and "1,050" reads as a quantity. Burke Bot writes it bare too.
+  $("st-rating").textContent = bot.stats.botRating ? String(bot.stats.botRating) : "—"
   $("st-top1").textContent = bot.stats.top1 != null ? Math.round(bot.stats.top1 * 100) + "%" : "—"
   // favouriteOpening is an object - { name, colour, games, ofGames, share } -
   // and only the family name belongs in the tile. Reading it as a string put
@@ -1251,7 +1253,7 @@ async function finish(bot, accounts) {
 async function openBoard(own) {
   const bot = state.bot
   if (!bot) return
-    const rating = bot.stats.botRating ? bot.stats.botRating.toLocaleString("en-US") : null
+    const rating = bot.stats.botRating ? String(bot.stats.botRating) : null
     $("nm-top").textContent = rating ? `${bot.meta.name} Bot (${rating})` : `${bot.meta.name} Bot`
   $("from-shared").innerHTML =
     `Same machinery as <a href="../">Burke&nbsp;Bot</a> &mdash; pointed at ` +
@@ -1359,8 +1361,7 @@ async function boot() {
           // the sender's measured levers, so their bot plays here as it did there
           // play.js reads meta.rating; without this a shared bot shows a bare
           // name while the builder's own shows "Name (1,050)".
-          rating: payload.meta && payload.meta.r
-            ? payload.meta.r.toLocaleString("en-US") : null,
+          rating: payload.meta && payload.meta.r ? String(payload.meta.r) : null,
           poolDepth: payload.meta && payload.meta.pd,
           horizonDepth: payload.meta && payload.meta.hd,
           multipv: payload.meta && payload.meta.mp,
