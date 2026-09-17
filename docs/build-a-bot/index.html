@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
   <div class="wrap">
@@ -184,7 +184,10 @@
         </div>
 
         <div class="player">
-          <span class="avatar bot" aria-hidden="true">&#9822;</span>
+          <!-- filled by play.js with the same drawing Burke Bot uses, so the two
+               boards show the same character. Empty to start rather than holding a
+               placeholder that would flash a different icon first. -->
+          <span class="avatar bot" id="av-top" aria-hidden="true"></span>
           <span class="pname" id="nm-top">&mdash;</span>
           <span class="caps" id="cap-top"></span>
         </div>
@@ -215,11 +218,8 @@
         </div>
 
         <div class="player">
-          <span class="avatar human" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>
-          </span>
-          <span class="pname">Challenger</span>
+          <span class="avatar human" id="av-bot" aria-hidden="true"></span>
+          <span class="pname">Pawnling</span>
           <span class="caps" id="cap-bot"></span>
         </div>
 
@@ -247,6 +247,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=35"></script>
+  <script type="module" src="build-a-bot.js?v=37"></script>
 </body>
 </html>

@@ -338,18 +338,20 @@ body[data-route="shared"] footer{
   padding-left:var(--eval-w); min-height:2.15rem;
 }
 .player:first-of-type{margin-bottom:.5rem}
+/* Burke Bot's treatment, so the same two drawings read the same on both boards:
+   the artwork fills the tile, and there is no border - both avatars set it to
+   their own background anyway, so it only shrank the drawing by a pixel a side. */
 .avatar{
-  flex:none; width:2rem; height:2rem; border-radius:6px;
+  flex:none; width:2rem; height:2rem; border-radius:6px; overflow:hidden;
   display:flex; align-items:center; justify-content:center;
-  background:var(--surface-2); border:1px solid var(--border); color:var(--ink-2);
+  background:var(--sq-dark); border:0; color:var(--ink-2);
 }
+.avatar svg{width:100%; height:100%; display:block; shape-rendering:geometricPrecision}
 .avatar.bot{
   background:var(--sq-dark); border-color:var(--sq-dark);
   color:var(--sq-light); font-size:1.3rem; line-height:1;
 }
-.avatar.human svg{width:62%; height:62%}
 .pname{font-size:.92rem; font-weight:500; color:var(--ink); white-space:nowrap}
-.pname .rat{font-weight:400; color:var(--ink-2); font-size:.86em}
 .caps{
   margin-left:.35rem; color:var(--ink-2); font-size:1.2rem; line-height:1;
   /* IBM Plex Mono has no chess glyphs, so these need an explicit fallback or

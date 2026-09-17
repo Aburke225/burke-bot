@@ -308,7 +308,12 @@ export async function createGame(opts = {}) {
   const poolDepth = meta.poolDepth || POOL_DEPTH
   const horizonDepth = meta.horizonDepth || HORIZON_DEPTH
   const multipv = meta.multipv || MULTIPV
-  const botName = meta.username ? String(meta.username) : "Bot"
+  // "Burkeley Bot", not "Burkeley" - the row names the OPPONENT, and the
+  // opponent is a bot built from that person's games, not the person. Burke Bot
+  // labels its own the same way, and these two boards sit one click apart.
+  const botName = meta.name
+    ? String(meta.name) + " Bot"
+    : (meta.username ? String(meta.username) + " Bot" : "Bot")
 
   const sfx = makeSfx(muted)
 

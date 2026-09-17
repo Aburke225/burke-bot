@@ -85,7 +85,22 @@ function setTheme(light) {
   // Burke Bot's speaker, to the coordinate. This page had a one-wave version of
   // it, and the two sit on pages a visitor moves between - a control that is
   // nearly the same is worse than one that is plainly different.
-  const SPK_BODY = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
+  /**
+ * Sibling modules inherit this file's cache-busting version.
+ *
+ * index.html versions build-a-bot.js and style.css, but the four modules this
+ * file pulls in dynamically were plain paths - so a deploy could hand a visitor
+ * a NEW controller and, for up to the ten minutes GitHub Pages caches for, the
+ * build.js it had before. Reading the version off our own URL means one bump in
+ * index.html moves all of them together, and it cannot drift out of step with
+ * that bump the way a second hardcoded constant would.
+ */
+const ASSET_V = (() => {
+  try { return new URL(import.meta.url).searchParams.get("v") || "" } catch (e) { return "" }
+})()
+const VQ = ASSET_V ? `?v=${ASSET_V}` : ""
+
+const SPK_BODY = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
   const SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
     'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
   const SPK = SVG_OPEN + SPK_BODY +
@@ -498,7 +513,7 @@ function describeUpload() {
 async function takeFiles(files) {
   const list = [...files].filter((f) => f && f.size)
   if (!list.length) return
-  const G = state.upload.mod || (state.upload.mod = await import("./games.js"))
+  const G = state.upload.mod || (state.upload.mod = await import(`./games.js${VQ}`))
 
   state.upload.texts = state.upload.texts || []
   for (const f of list) {
@@ -858,14 +873,14 @@ function updateSlider() {
 
 async function ensureEngine() {
   if (state.engine) return state.engine
-  const { createEngine } = await import("./engine.js")
+  const { createEngine } = await import(`./engine.js${VQ}`)
   state.engine = await createEngine({})
   try {
     // Calibrate on a WHOLE decision - engine plus this app's own feature work -
     // because the engine is under a fifth of it. build.js owns that path, so it
     // owns the measurement; engine.calibrate() is kept for the engine-only
     // figure, which is still worth having for diagnostics.
-    const { calibrateDecision } = await import("./build.js")
+    const { calibrateDecision } = await import(`./build.js${VQ}`)
     const cal = await calibrateDecision(state.engine)
     state.msPerDecision = cal.msPerDecision
     state.msPerPosition = null
@@ -918,7 +933,7 @@ async function build() {
   state.abort = new AbortController()
   try {
     const engine = await ensureEngine()
-    const { buildBot } = await import("./build.js")
+    const { buildBot } = await import(`./build.js${VQ}`)
     const bot = await buildBot({
       accounts,
       speeds: [...state.speeds],
@@ -1236,8 +1251,8 @@ async function finish(bot, accounts) {
 async function openBoard(own) {
   const bot = state.bot
   if (!bot) return
-  $("nm-top").innerHTML =
-    `${bot.meta.name} Bot <span class="rat">(${bot.stats.botRating ? bot.stats.botRating.toLocaleString("en-US") : "—"})</span>`
+    const rating = bot.stats.botRating ? bot.stats.botRating.toLocaleString("en-US") : null
+    $("nm-top").textContent = rating ? `${bot.meta.name} Bot (${rating})` : `${bot.meta.name} Bot`
   $("from-shared").innerHTML =
     `Same machinery as <a href="../">Burke&nbsp;Bot</a> &mdash; pointed at ` +
     `<a href="${bot.meta.profileUrl}" rel="noopener">${bot.meta.name}&rsquo;s</a> games instead of mine.`
@@ -1250,7 +1265,7 @@ async function openBoard(own) {
   }
 
   const engine = await ensureEngine()
-  const { createGame } = await import("./play.js")
+  const { createGame } = await import(`./play.js${VQ}`)
   if (state.game) state.game.destroy()
   // buildBot returns the book twice: `book` is the packed trie destined for the
   // URL, `bookMap` is the lookup table. play.js wants the lookup table. A book
@@ -1266,8 +1281,14 @@ async function openBoard(own) {
   state.game = await createGame({
     boardEl: $("board"),
     evalBarEl: $("eval-bar"), evalFillEl: $("eval-fill"), evalNumEl: $("eval-num"),
-    topRow: { capsEl: $("cap-top") },   // nameEl withheld on purpose - see below
-    bottomRow: { capsEl: $("cap-bot") },
+    // nameEl IS handed over now: play.js renders "Name (rating)" as one plain
+    // string, which is the form Burke Bot uses. It used to be withheld because
+    // the label here carried its own markup for the rating; that markup is what
+    // made the two sites look different, so it went instead.
+    topRow: { avatarEl: $("av-top"), nameEl: $("nm-top"), capsEl: $("cap-top") },
+    // bottomRow.nameEl is NOT passed - play.js would write "You" over the
+    // "Pawnling" the markup already carries.
+    bottomRow: { avatarEl: $("av-bot"), capsEl: $("cap-bot") },
     pickOverlay: $("spick"), confirmOverlay: $("sconfirm"), endOverlay: $("send"),
     endTitleEl: $("end-title"), endLineEl: $("end-line"),
     resignBtn: $("resign-btn"), resignNo: $("resign-no"), resignYes: $("resign-yes"),
@@ -1336,6 +1357,10 @@ async function boot() {
           username: (payload.meta && payload.meta.u) || "someone",
           site: (payload.meta && payload.meta.s) || "chesscom",
           // the sender's measured levers, so their bot plays here as it did there
+          // play.js reads meta.rating; without this a shared bot shows a bare
+          // name while the builder's own shows "Name (1,050)".
+          rating: payload.meta && payload.meta.r
+            ? payload.meta.r.toLocaleString("en-US") : null,
           poolDepth: payload.meta && payload.meta.pd,
           horizonDepth: payload.meta && payload.meta.hd,
           multipv: payload.meta && payload.meta.mp,
