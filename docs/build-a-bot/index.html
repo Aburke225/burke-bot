@@ -104,7 +104,14 @@
         <p class="note" id="count-msg" hidden></p>
         <div class="actions">
           <ul class="assure">
-            <li>Nothing is uploaded</li>
+            <!-- Was "Nothing is uploaded", which stopped reading as reassurance
+                 the moment a button on this same card said "Upload bot games".
+                 Still true - every request this page makes is a GET pulling
+                 something IN, and a dropped PGN is read by the browser and never
+                 sent - but a promise that appears to contradict the control next
+                 to it is not a promise anyone believes. Naming the server says
+                 the same thing without the collision. -->
+            <li>Nothing is sent to a server</li>
             <li>Your games never leave this tab</li>
             <li>Everything runs on your machine</li>
           </ul>
@@ -240,6 +247,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=27"></script>
+  <script type="module" src="build-a-bot.js?v=30"></script>
 </body>
 </html>

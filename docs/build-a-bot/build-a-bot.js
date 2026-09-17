@@ -479,7 +479,7 @@ function describeUpload() {
   msg.className = "upload-result " + (n ? "ok" : "none")
   msg.innerHTML =
     `<span class="head"><b>${n.toLocaleString("en-US")}</b> ` +
-    `game${n === 1 ? "" : "s"} added</span>` +
+    `bot game${n === 1 ? "" : "s"} added</span>` +
     (notes.length ? `<span class="why">${notes.join(" &middot; ")}</span>` : "")
   msg.hidden = false
 }
@@ -716,6 +716,15 @@ const OVERHEAD_SECS = 4
  * engine, the JavaScript, the yield, AND a 24% error in decisions per game.
  */
 const LOOP_FACTOR = 3.0
+// Download is done by the time this is used, so it covers probe + fit + book.
+const POST_DOWNLOAD_SECS = 4
+// What is left after scoring finishes: the fit and the opening book.
+const TAIL_SECS = 2
+
+function estimateFromDecisions(points) {
+  const ms = state.msPerDecision || 12.5
+  return POST_DOWNLOAD_SECS + (points * ms * LOOP_FACTOR) / 1000
+}
 
 function estimateSeconds(n) {
   // msPerDecision is the real cost of one decision point - pool search plus
@@ -871,6 +880,7 @@ async function build() {
     ($("rated").checked ? "rated only" : "rated and casual") +
     `<span class="eta"><span>&middot;</span> about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b> to build</span>`
   state.buildSize = n
+  state.scoreT0 = null
   resetSteps()
   // One run, the length of the whole estimate. Overrun and it closes on 99.2%
   // by halves without ever arriving; only the build finishing fills it.
@@ -968,12 +978,34 @@ function stopBar() {
 
 // An ease-out: quick off the mark, slowing as it approaches the ceiling, which
 // is how a progress bar reads as "working" rather than as "counting down".
-function startBar(seconds) {
+function currentPct() {
+  return parseFloat($("fill").style.width) || 0
+}
+
+/**
+ * Re-time the bar mid-flight without moving it.
+ *
+ * The setup estimate is games x an average decisions-per-game, and game LENGTH
+ * varies far more than game count does - a 36-game build measured 0.78s a game
+ * against 1.41s for a 72-game one, purely because the games were shorter. Once
+ * the download lands, the exact number of decision points is known, so the bar
+ * stops extrapolating and starts running on the real figure.
+ *
+ * It re-anchors rather than restarting: the curve picks up from whatever width
+ * is already painted, so the bar never jumps or goes backwards - the only thing
+ * that changes is how fast it moves from here.
+ */
+function repaceBar(seconds) {
+  startBar(seconds, currentPct())
+}
+
+function startBar(seconds, from = 0) {
   stopBar()
-  barFrom = 0
+  barFrom = from
   barStart = performance.now()
   barSpan = Math.max(600, seconds * 1000)
-  paintBar(0)
+  // paint the anchor, not zero - re-pacing mid-build must not snap the bar back
+  paintBar(barFrom)
   barTimer = setInterval(() => {
     const t = (performance.now() - barStart) / barSpan
     if (t <= 1) {
@@ -986,7 +1018,7 @@ function startBar(seconds) {
       // keeps closing on 99.2% by halves. Always moving, never arriving; only
       // the step actually ending fills it.
       const over = t - 1
-      const ceil = BAR_CEILING * 100
+      const ceil = Math.max(BAR_CEILING * 100, barFrom)
       paintBar(BAR_ASYMPTOTE - (BAR_ASYMPTOTE - ceil) * Math.exp(-over))
     }
   }, 50)
@@ -1049,6 +1081,34 @@ function finishSteps() {
 }
 
 function onProgress(p) {
+  // Not a step - it is the moment the guesswork can stop. buildBot reports the
+  // true number of decision points as soon as the games are parsed, which is
+  // the only figure that actually predicts how long scoring will take.
+  if (p.phase === "plan") {
+    state.decisions = p.total
+    repaceBar(estimateFromDecisions(p.total))
+    return
+  }
+
+  // Scoring is the long pole, and it reports once per game - which is enough to
+  // measure this build's ACTUAL rate instead of predicting it. Two builds of
+  // the same size differ by more than a third depending on how long the games
+  // are and how the engine warms, so a figure fixed before the first move was
+  // read can only ever be close. From here the bar runs on observed throughput.
+  if (p.phase === "score" && p.total) {
+    if (state.scoreT0 == null) { state.scoreT0 = performance.now(); state.lastRepace = 0 }
+    const frac = p.done / p.total
+    const elapsed = (performance.now() - state.scoreT0) / 1000
+    // Wait for a tenth of the work before believing the rate, and re-pace at
+    // most twice a second: an estimate that twitches is worse than one slightly
+    // behind.
+    if (frac > 0.1 && elapsed - state.lastRepace > 2) {
+      state.lastRepace = elapsed
+      const projectedScoring = elapsed / frac
+      repaceBar(Math.max(1, projectedScoring - elapsed + TAIL_SECS))
+    }
+    // fall through: the step row still wants its "game 5 of 24" detail
+  }
   const i = STEPS.findIndex((s) => s[0] === p.phase)
   // An unknown phase still deserves its label rather than being dropped.
   if (i === -1) { if (p.label) setNote(p.label); return }

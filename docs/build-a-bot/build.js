@@ -1193,6 +1193,12 @@ export async function buildBot(opts, onProgress) {
     )
   }
 
+  // The real size of the job, now that the games are actually here. Until this
+  // moment the only guide was games x an average decisions-per-game, and game
+  // LENGTH varies far more than game count - so a caller pacing a progress bar
+  // can stop guessing from here on.
+  report("plan", points.length, points.length, `Planning ${points.length} decisions`)
+
   const engine = o.engine || (await createEngine(o.engineOpts))
   const ownEngine = !o.engine
 
