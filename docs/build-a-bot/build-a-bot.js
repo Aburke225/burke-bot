@@ -869,7 +869,7 @@ async function build() {
   $("recap-building").innerHTML =
     `<b>${cap}</b> <span>&middot;</span> <b>${n}</b> games <span>&middot;</span> ` +
     ($("rated").checked ? "rated only" : "rated and casual") +
-    `<span class="eta"><span>&middot;</span> about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b></span>`
+    `<span class="eta"><span>&middot;</span> about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b> to build</span>`
   state.buildSize = n
   resetSteps()
   show("building", { top: true })

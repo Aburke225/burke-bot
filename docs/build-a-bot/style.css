@@ -269,9 +269,19 @@ input[type=range]{
      alignment puts its foot on the text's baseline and no nudge is needed. */
   content:""; width:.56rem; height:.56rem;
   /* Baseline alignment puts a circle on the CAPITAL band, and beside a line of
-     mostly lowercase text that reads a pixel high. Nudged onto the lowercase
-     centre instead, which is where the eye actually looks. */
-  transform:translateY(.1em);
+     mostly lowercase text that reads a pixel high, so it wants nudging down.
+     NOT with transform: step-spin animates transform, so a static translate on
+     the same element does not stack with it - it is the FROM value the rotation
+     interpolates away from, which makes the wheel bob up and down instead of
+     spinning. Relative positioning moves it without touching the property the
+     animation owns. */
+  position:relative; top:.1em;
+  /* And the glyph rule's translate must be cancelled, not inherited: it is the
+     same property step-spin animates, so leaving it in place is what made the
+     wheel bob instead of turn. none = identity, which is the base the rotation
+     is meant to start from - the build page's wheel works precisely because
+     nothing sets a transform on it. */
+  transform:none;
   border:2px solid var(--border); border-top-color:var(--accent);
   border-radius:50%; animation:step-spin .8s linear infinite;
 }
@@ -416,6 +426,11 @@ body[data-route="shared"] footer{
   border-bottom:1px solid var(--border); margin-bottom:1rem;
 }
 .recap b{color:var(--ink); font-weight:500}
+/* an unstyled <a> renders in the browser's blue, which is the one colour on the
+   page that belongs to no theme. No underline at all - not on hover either;
+   brightening to full ink is the hover signal, the way the icon buttons do it. */
+.recap a{color:var(--accent); text-decoration:none}
+.recap a:hover{color:var(--ink)}
 /* One gap governs the three things stacked under the heading - bar, checklist,
    Cancel - so the two spaces are equal by construction rather than by two
    numbers that happen to match today. It is in rem, and the root font on this
