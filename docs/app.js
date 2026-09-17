@@ -21,6 +21,7 @@ let botColor = "w"
 let inBook = true
 let gameId = 0
 let styleModel = null
+let botRating = null   // stats.bot_scale_strength, shown beside the bot's name
 let stdStart = true  // capture only games that began from the standard position
 let gameActive = false
 const CAPTURE_URL = "https://prompt-yourself-bot.andrewburke225.workers.dev/chess/game"
@@ -389,7 +390,11 @@ function renderPlayers() {
   // starts in its white-at-the-bottom orientation, which puts the bot on the
   // black side, and that is the pairing the pick overlay is offering.
   if (avTop.dataset.set !== "bot") { avTop.className = "avatar bot"; avTop.innerHTML = BOT_AVATAR; avTop.dataset.set = "bot" }
-  document.getElementById("nm-top").textContent = "Burke Bot"
+  // The rating lives here rather than in the stats card: it describes this
+  // opponent, so it belongs on the opponent. Falls back to the bare name if
+  // stats.json has not landed yet (renderMoves can beat boot to it).
+  document.getElementById("nm-top").textContent =
+    botRating ? "Burke Bot (" + botRating + ")" : "Burke Bot"
 
   // the icon follows the name, so signing in promotes the pawn as well
   const who = signedIn ? "burke" : "pawnling"
@@ -1725,7 +1730,6 @@ function newGame(userColor) {
 function renderStats(stats) {
   const list = document.getElementById("stats-list")
   const rows = [
-    ["rating", stats.bot_scale_strength ? String(stats.bot_scale_strength) : "—"],
     ["games learned from", String(stats.games)],
     ["book positions", stats.book_positions.toLocaleString("en-US")],
     ["favorite opening as White", stats.openings_white[0] ? stats.openings_white[0][0] : "—"],
@@ -1735,7 +1739,7 @@ function renderStats(stats) {
   for (const [k, v] of rows) {
     const dt = document.createElement("dt"); dt.textContent = k
     const dd = document.createElement("dd"); dd.textContent = v
-    if (k === "rating" || k.startsWith("favorite")) dd.className = "g"
+    if (k.startsWith("favorite")) dd.className = "g"
     // The opening labels run nearly the full width of the card. Marked so a
     // phone can drop their value onto its own line instead of squeezing it
     // into what little room is left beside the label.
@@ -1864,6 +1868,7 @@ async function boot() {
 
   // boot() never reaches renderMoves(), so the rows are named here - they are
   // on screen from page load, before a colour has been picked
+  botRating = stats.bot_scale_strength || null
   renderPlayers()
 
   const verEl = document.getElementById("model-version")

@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/markers/markers.css">
   <link rel="stylesheet" href="../vendor/cm-chessboard/assets/extensions/promotion-dialog/promotion-dialog.css">
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
   <div class="wrap">
@@ -78,9 +78,8 @@
         <div class="drop" id="drop-wrap" hidden>
           <input type="file" id="pgn" accept=".pgn,.txt,application/vnd.chess-pgn,application/x-chess-pgn,text/plain" multiple hidden>
           <p class="drop-line">
-            chess.com does not publish games against its bots.
-            <span class="on-pointer">Export them and drop the PGN here.</span>
-            <span class="on-touch">Export them and upload the PGN here.</span>
+            <span>chess.com does not publish games against bots.</span>
+            <span>Export them and upload the PGN here.</span>
           </p>
           <!-- Touch only. There is nothing to drag FROM on a phone, so without a
                button the box would be an instruction nobody can follow. It has no
@@ -241,6 +240,6 @@
     </footer>
   </div>
 
-  <script type="module" src="build-a-bot.js?v=17"></script>
+  <script type="module" src="build-a-bot.js?v=22"></script>
 </body>
 </html>

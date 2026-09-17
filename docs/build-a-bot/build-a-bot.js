@@ -29,6 +29,7 @@ const state = {
   profiles: {},        // site -> profile from Games.fetchProfile
   counts: {},          // speed -> pooled game count
   speeds: new Set(),
+  autoOff: new Set(),   // speeds the rated filter emptied, to be revived when it lifts
   msPerPosition: null, // from engine.calibrate()
   cap: 400,            // device-calibrated ceiling
   bot: null,           // { weights, book, levers, stats, meta }
@@ -233,11 +234,17 @@ async function startArchiveScan() {
   const note = $("speeds-msg")
   note.hidden = false
   note.innerHTML = '<li class="busy"><span class="t">Counting your casual games&hellip;</span></li>'
+  // Write into the SAME element on every tick. Replacing the <li> replaces the
+  // pseudo-element the spin is attached to, which restarts the animation from
+  // zero - so the wheel stuttered once per month scanned, turning an "it is
+  // working" signal into a progress readout nobody asked for. The text changes;
+  // the wheel is left alone to spin.
+  const busyText = note.querySelector(".t")
   try {
     const scan = await Games.scanChesscomArchive(prof.username, {}, (p) => {
       if (token !== scanToken) return
-      note.innerHTML = `<li class="busy"><span class="t">Counting your casual games&hellip; ` +
-        `<b>${p.found.toLocaleString("en-US")}</b> so far (${p.done} of ${p.total} months)</span></li>`
+      busyText.innerHTML = `Counting your casual games&hellip; ` +
+        `<b>${p.found.toLocaleString("en-US")}</b> so far (${p.done} of ${p.total} months)`
     })
     if (token !== scanToken) return
     applyScan(scan)
@@ -253,32 +260,44 @@ async function startArchiveScan() {
 
 function applyScan(scan) {
   state.scan = scan
-  const casual = scan.total - SPEEDS_ALL.reduce((a, sp) => a + (scan.ratedCounts[sp] || 0), 0)
-  renderSpeeds()
+  renderSpeeds()          // which calls syncSpeedCounts, which draws the facts
+  updateSlider()
+}
+
+/**
+ * What the scan found, as two statements: what came in and what did not.
+ *
+ * The first line follows the rated checkbox, because ticking it changes the
+ * answer. Casual games are the whole reason this scan exists - chess.com's
+ * profile totals cannot see one - so a row still claiming they are included
+ * while the checkbox excludes them would be the page contradicting itself one
+ * line above the box that did it.
+ */
+function renderFacts() {
   const note = $("speeds-msg")
-  // Two things changed at once and both need saying, because one of these
-  // numbers can go DOWN. Casual games come in (chess.com's profile totals
-  // cannot see them - burkeley's only bullet and only blitz game are both
-  // casual, and /stats does not even carry a key for those pools), while games
-  // too short to learn from drop out (a 6-move resignation counts on a ladder
-  // but teaches nothing). What is left is the number of games that will
-  // actually be used, which is the only number worth putting on a slider.
+  const scan = state.scan
+  if (!scan) return
+  const ratedOnly = $("rated").checked
+  const casual = scan.total - SPEEDS_ALL.reduce((a, sp) => a + (scan.ratedCounts[sp] || 0), 0)
   const short = scan.tooShort || 0
-  // Two statements, not one sentence: what came in, and what did not. A tick
-  // and a cross carry that distinction faster than the prose did, and the
-  // second line only exists when something actually fell out.
-  const rows = [
-    `<li class="yes"><span class="t">Read from your whole archive, casual games included` +
-    (casual > 0 ? ` &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual.` : ".") +
-    `</span></li>`,
-  ]
+
+  const rows = []
+  if (ratedOnly) {
+    rows.push(`<li class="no"><span class="t">Read from your whole archive, ` +
+      `casual games not included.</span></li>`)
+  } else {
+    rows.push(`<li class="yes"><span class="t">Read from your whole archive, casual games included` +
+      (casual > 0 ? ` &mdash; <b>${casual.toLocaleString("en-US")}</b> of these are casual.` : ".") +
+      `</span></li>`)
+  }
+  // A six-move resignation counts on a ladder but teaches nothing, so it is out
+  // either way - the rated checkbox has no bearing on this line.
   if (short) {
     rows.push(`<li class="no"><span class="t"><b>${short.toLocaleString("en-US")}</b> ` +
       `game${short === 1 ? " was" : "s were"} too short to learn from.</span></li>`)
   }
   note.innerHTML = rows.join("")
   note.hidden = false
-  updateSlider()
 }
 
 const SPEEDS_ALL = ["bullet", "blitz", "rapid", "classical", "daily"]
@@ -318,6 +337,7 @@ function renderSpeeds() {
   const box = $("speeds")
   box.innerHTML = ""
   state.speeds = new Set()
+  state.autoOff = new Set()
   for (const sp of SPEED_ORDER) {
     if (!state.allCounts[sp]) continue
     state.speeds.add(sp)            // present means on, per the agreed rule
@@ -359,10 +379,18 @@ function syncSpeedCounts() {
     const n = state.counts[sp] || 0
     const cb = lab.querySelector("input")
     lab.querySelector(".ct").textContent = n.toLocaleString("en-US")
-    if (!n && cb.checked) { cb.checked = false; state.speeds.delete(sp) }
+    // Untick what the rated filter emptied - and tick it back when the filter
+    // lifts. Only speeds THIS code turned off are revived: a speed the player
+    // unticked themselves stays off, because coming back to life under them
+    // would be the page overruling a choice they made on purpose.
+    if (!n && cb.checked) { cb.checked = false; state.speeds.delete(sp); state.autoOff.add(sp) }
+    else if (n && !cb.checked && state.autoOff.has(sp)) {
+      cb.checked = true; state.speeds.add(sp); state.autoOff.delete(sp)
+    }
     lab.classList.toggle("off", !cb.checked)
     lab.classList.toggle("empty", !n)
   }
+  renderFacts()
   updateSlider()
 }
 
@@ -378,6 +406,9 @@ function onSpeedChange(ev) {
     $("rated").checked = false
   }
 
+  // Touching the box at all makes it the player's, so it stops being ours to
+  // revive later.
+  state.autoOff.delete(sp)
   if (cb.checked) state.speeds.add(sp)
   else state.speeds.delete(sp)
   // uploaded games are filtered by speed too, so they have to be re-read
@@ -426,9 +457,11 @@ function describeUpload() {
   // The headline is the whole point: a file went in and games came out. It gets
   // the size and the colour. Everything else - what was untimed, what was too
   // short - is a footnote to that, and reads as one.
+  // ONLY games that did not make it. "30 untimed" was noise here: those games
+  // were added, so listing them beside the exclusions invited the reader to
+  // subtract a number that is already inside the count.
   const s = u.skipped
   const notes = []
-  if (s.untimed) notes.push(`${s.untimed} untimed`)
   if (s.unplaceable) notes.push(`${s.unplaceable} with neither player recognised`)
   if (s.speed) notes.push(`${s.speed} outside the game types above`)
   if (s.variant) notes.push(`${s.variant} not standard chess`)
@@ -446,7 +479,7 @@ function describeUpload() {
   msg.innerHTML =
     `<span class="head"><b>${n.toLocaleString("en-US")}</b> ` +
     `game${n === 1 ? "" : "s"} added</span>` +
-    (notes.length ? `<span class="sub">${notes.join(" &middot; ")}</span>` : "")
+    (notes.length ? `<span class="why">${notes.join(" &middot; ")}</span>` : "")
   msg.hidden = false
 }
 
@@ -644,6 +677,41 @@ function quality(n) {
   return hit
 }
 
+/**
+ * How long a build of n games takes.
+ *
+ * ~27.7 decision points a game, each costing one calibrated engine search, is
+ * the scoring pass - the long pole but NOT the whole job. Downloading, the
+ * probe, the fit and the opening book all take real time that a scoring-only
+ * figure silently omits, which is why the number used to read low. OVERHEAD
+ * and SCORING_FACTOR carry those, both measured against real builds rather
+ * than reasoned about.
+ */
+const DECISIONS_PER_GAME = 27.7
+const OVERHEAD_SECS = 4
+// Measured, because the old estimate was not close. Four real builds on one
+// machine, newest-first from the same archive, with a repeat of the smallest
+// afterwards as a control (16.0s against 17.2s originally - so no drift to
+// explain the curve away):
+//
+//     games   predicted   actual
+//        12        30s     17.2s
+//        36        33s     32.0s
+//        72        40s    104.6s
+//
+// The old figure counted the scoring pass only and trusted calibrate(), which
+// under-reports what scoring actually costs by roughly five times: ~9.5ms a
+// position against ~50ms measured. This factor closes that gap. It lands within
+// a few seconds at 12 and 72 games and runs high at 36 - deliberately the safer
+// direction, since a build that beats its estimate is a good surprise and one
+// that doubles it is not.
+const SCORING_FACTOR = 5.3
+
+function estimateSeconds(n) {
+  const ms = state.msPerPosition || 11
+  return OVERHEAD_SECS + (n * DECISIONS_PER_GAME * ms * SCORING_FACTOR) / 1000
+}
+
 function prettyTime(secs) {
   if (secs < 60) return Math.max(1, Math.round(secs)) + "s"
   const m = Math.floor(secs / 60), s = Math.round(secs % 60)
@@ -729,9 +797,8 @@ function updateSlider() {
     : `all ${total.toLocaleString("en-US")}`
 
   const n = +slider.value
-  // 27.7 decision points per game, two searches each
-  const ms = state.msPerPosition || 11
-  const secs = (n * 27.7 * ms) / 1000
+  const secs = estimateSeconds(n)
+  state.etaSecs = secs
   const e = quality(n)
   $("readout").innerHTML =
     `<b>${n.toLocaleString("en-US")}</b> games` +
@@ -772,9 +839,14 @@ async function build() {
   const n = +$("games").value
   const who = accounts.map(a => a.username).join(" + ")
   const cap = titleCase(accounts[0].username)
+  // The estimate rides along here and nowhere else: it is the one screen where
+  // "how long is this going to take" is the live question. It is the figure the
+  // setup page quoted, frozen - a number that keeps revising itself while you
+  // watch is a worse answer than a slightly wrong one that holds still.
   $("recap-building").innerHTML =
     `<b>${cap}</b> <span>&middot;</span> <b>${n}</b> games <span>&middot;</span> ` +
-    ($("rated").checked ? "rated only" : "rated and casual")
+    ($("rated").checked ? "rated only" : "rated and casual") +
+    `<span class="eta"><span>&middot;</span> about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b></span>`
   state.buildSize = n
   resetSteps()
   show("building", { top: true })
@@ -1021,8 +1093,17 @@ async function finish(bot, accounts) {
   state.bot = bot
 
   $("bot-name").textContent = `${name} Bot`
-  $("recap-result").innerHTML = $("recap-building").innerHTML.replace(
-    /$/, ` <span>&middot;</span> <a href="#" id="again-link">build another bot</a>`)
+  // Strip the estimate: on the result page the wait is over, so how long it was
+  // going to take is no longer a question anyone has. Done by removing the NODE
+  // rather than by pattern-matching the markup - the first attempt at this used
+  // a regex that assumed the span ended in </span></span> when it actually ends
+  // in </b></span>, so it silently matched nothing and the estimate shipped
+  // through to the result page.
+  const recap = $("recap-building").cloneNode(true)
+  const eta = recap.querySelector(".eta")
+  if (eta) eta.remove()
+  $("recap-result").innerHTML = recap.innerHTML +
+    ` <span>&middot;</span> <a href="#" id="again-link">build another bot</a>`
   $("st-rating").textContent = bot.stats.botRating ? bot.stats.botRating.toLocaleString("en-US") : "—"
   $("st-top1").textContent = bot.stats.top1 != null ? Math.round(bot.stats.top1 * 100) + "%" : "—"
   // favouriteOpening is an object - { name, colour, games, ofGames, share } -

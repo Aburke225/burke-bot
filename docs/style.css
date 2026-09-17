@@ -91,9 +91,17 @@ body {
 }
 .login-btn {
   font: inherit;
-  font-size: 0.85rem;
+  /* Bigger and bolder so the label carries the same visual weight as the two
+     icon buttons beside it, whose strokes are far heavier than 0.85rem/400 was.
+     The padding pays for the extra width exactly: the label is monospace, so it
+     costs 5.4rem per em of font-size (9 chars x 0.6 advance) and bold adds
+     nothing, which makes the button 2px + 2*pad + 5.4*size wide. Holding that
+     at its old 6.39rem + 2px means pad = (6.39 - 5.4*0.95)/2 = 0.63rem, so the
+     box is unchanged at every root size - both terms are rem. */
+  font-size: 0.95rem;
+  font-weight: 600;
   height: 38px;
-  padding: 0 0.9rem;
+  padding: 0 0.63rem;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);

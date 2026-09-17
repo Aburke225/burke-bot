@@ -267,7 +267,11 @@ input[type=range]{
   /* one cap-height tall, so it occupies exactly the band the capitals do. As a
      flex item with no text its baseline is its bottom edge, so baseline
      alignment puts its foot on the text's baseline and no nudge is needed. */
-  content:""; width:.56rem; height:.56rem; transform:none;
+  content:""; width:.56rem; height:.56rem;
+  /* Baseline alignment puts a circle on the CAPITAL band, and beside a line of
+     mostly lowercase text that reads a pixel high. Nudged onto the lowercase
+     centre instead, which is where the eye actually looks. */
+  transform:translateY(.1em);
   border:2px solid var(--border); border-top-color:var(--accent);
   border-radius:50%; animation:step-spin .8s linear infinite;
 }
@@ -400,6 +404,12 @@ body[data-route="shared"] footer{
 .promo h2{font-family:"Alfa Slab One",Georgia,serif; font-weight:400; font-size:1.35rem}
 
 /* building */
+/* The recap and the line under the heading are the two pieces of running
+   commentary on these pages, so they take one size - and it is the checklist's
+   size, because a step that has finished should not be shouting over the line
+   explaining what is happening. */
+#building .recap, #result .recap{font-size:.88rem}
+#building .card > .sub, #result .card > .sub{font-size:.88rem}
 .recap{
   display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
   font-size:.86rem; color:var(--ink-2); padding-bottom:.9rem;
@@ -488,7 +498,8 @@ body[data-route="shared"] footer{
 }
 .drop{cursor:pointer}
 .drop:hover{border-color:var(--accent-dim)}
-.drop-line .on-touch{display:none}
+/* one sentence per line: what the situation is, then what to do about it */
+.drop-line span{display:block}
 #pgn-btn{display:none}
 
 /* A touch device cannot drag a file from anywhere, so the dashed "drop here"
@@ -499,8 +510,6 @@ body[data-route="shared"] footer{
 @media (hover:none) and (pointer:coarse){
   .drop{border-style:solid; cursor:default}
   .drop:hover{border-color:var(--border)}
-  .drop-line .on-pointer{display:none}
-  .drop-line .on-touch{display:inline}
   #pgn-btn{display:inline-flex}
 }
 .drop.over{border-color:var(--accent); border-style:solid; background:var(--surface-2)}
@@ -530,7 +539,7 @@ body[data-route="shared"] footer{
   font-size:1.52rem; line-height:1; transform:translateY(.093em);
 }
 .upload-result .head b{font-weight:500; color:var(--accent); font-size:1.22rem}
-.upload-result .sub{font-size:.78rem; color:var(--ink-2); line-height:1.5; text-align:center}
+.upload-result .why{font-size:.78rem; color:var(--ink-2); line-height:1.45; text-align:center}
 
 /* Nothing came in. Same shape so the page does not jump, opposite reading: the
    warning ink and a cross, because a green tick over "0 games added" would be
