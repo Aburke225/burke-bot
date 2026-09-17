@@ -91,13 +91,93 @@ const EVAL_DEPTH = 18
 // on badness only a deeper search reveals is -0.027 / -0.173 / -0.164 / -0.009
 // from opening to bare board, never once distinguishable from zero, and it is
 // FLATTEST exactly where a deeper horizon was expected to show up.
-const PHASE_TEMP = [[0.15, 1.00], [0.40, 0.85], [0.60, 0.75], [Infinity, 0.65]]
-function playTemp(phase) {
-  for (const [upTo, t] of PHASE_TEMP) if (phase < upTo) return t
-  return 0.65
+// ...and the phase schedule that briefly replaced it is gone, because a
+// temperature is the wrong shape of tool for this. z/T = SUM (w_j/T) * x_j, so
+// dividing by a temperature is identical to multiplying ALL 58 weights. It
+// cannot buy accuracy without also buying more of everything else the fit
+// liked - which is why sharpening globally dragged captures from his 27.4% up
+// to 31.5%. The balance between "avoid what looks bad" and "grab the material"
+// never changes under a global T; the bot just gets louder about the blend.
+//
+// So only the score-derived weights are amplified, by k, and the softmax stays
+// at T=1. This changes the EXCHANGE RATE between accuracy and style instead of
+// the volume of both. Same accuracy, a quarter of the drift - out of fold over
+// 9,431 decisions, matched at a median loss of ~12cp:
+//
+//                                total drift   captures   checks
+//   global T   (k=1.40 = T 0.71)      0.0137      30.8%    11.8%
+//   perception (k=1.40)                0.0073      28.3%    10.8%
+//   him                                     -      27.4%    10.3%
+//
+// CALIBRATION. k is fitted per phase to his UNHURRIED play - the daily games,
+// hours per move - because that is the finding behind all of this: split by
+// time control his endgame loss is 220.9cp rapid against 56.3cp daily
+// (z = -5.0), and 357.8 against 74.4 on a bare board (z = -5.5). The steep
+// decline late is a clock artifact, not a skill one.
+//
+// Fitted by matching his daily loss DISTRIBUTION (p50, p75, p90) on a log
+// scale, not a single statistic: his daily midgame MEDIAN is 0.0 (he played
+// the engine's top move in over half of those 101 decisions) which alone sends
+// k to infinity, and his daily midgame MEAN is 226cp - worse than rapid -
+// because one or two blowups own it. On absolute rather than log error the fit
+// collapses to k~1.0, but only because a p90 term of ~130cp swamps a p50 term
+// of ~10cp; p90 is also the least reliable part of the target, estimated off
+// three or four observations. Result, against his daily p50/p75/p90:
+//
+//   phase       k     bot            him (daily)      n    80% range
+//   <0.15     1.8     6/37/81        6/38/125        71    1.40-2.25
+//   0.15-0.40 2.1     1/42/93        0/68/141       101    1.47-2.50
+//   0.40-0.60 1.7     14/66/131      15/59/167       35    1.17-2.52
+//   >=0.60    1.8     6/53/125       6/43/253        33    1.52-2.57
+//
+// It matches his median and 75th percentile and UNDERSHOOTS his 90th in every
+// phase: amplifying perception suppresses exactly the rare disasters, so the
+// bot is more consistent than unhurried him rather than identical to him.
+// Flat k=1.8 measures almost the same (drift 0.0127 against 0.0137) - only the
+// midgame really wants more - so do not read the four numbers as precise.
+// Whole-game drift 0.0137, captures 29.0% against his 27.4%, checks 11.1%
+// against 10.3%. Largest single drift is engine_rank (+0.300), which is one of
+// the five being amplified on purpose.
+//
+// Multiplication preserves sign, so each pull strengthens in the direction it
+// already had, and a zero weight stays zero - no new preference is invented.
+// Because horizon_loss_log is a log of the pawns given up, the suppression
+// compounds with how bad a move looks: a half-pawn slip becomes 0.83x as
+// likely, a three-pawn howler 0.54x. Small inaccuracies are left alone.
+// k by phase (1 - pieceCount/32), fitted to his DAILY error distribution -
+// see the calibration note below. Three of the four are indistinguishable from
+// each other; the midgame is the one that genuinely wants more.
+const PERCEPTION_K = [[0.15, 1.8], [0.40, 2.1], [0.60, 1.7], [Infinity, 1.8]]
+// by NAME, not index: the contract is append-only so these should never move,
+// but a rename must fail loudly rather than silently amplify a neighbour
+const PERCEPTION_FEATURES = ["horizon_loss_log", "horizon_loss_log_quiet",
+                             "horizon_winprob", "engine_rank",
+                             "imbalance_x_horizon_loss"]
+const perceptionCache = new Map()
+function perceptionK(phase) {
+  for (const [upTo, k] of PERCEPTION_K) if (phase < upTo) return k
+  return PERCEPTION_K[PERCEPTION_K.length - 1][1]
 }
-// the v8 fallback below still samples flat; it only runs when the horizon
-// search fails, and it is a different feature set with its own guards
+function v9Weights(phase) {
+  const k = perceptionK(phase)
+  if (perceptionCache.has(k)) return perceptionCache.get(k)
+  const names = Array.isArray(styleModel.names) ? styleModel.names : []
+  const missing = PERCEPTION_FEATURES.filter(n => names.indexOf(n) < 0)
+  if (missing.length) {
+    // amplifying the wrong index would be worse than not amplifying at all
+    console.warn("style model has no " + missing.join(", ") +
+                 " - playing the weights exactly as fitted")
+    perceptionCache.set(k, styleModel.weights)
+    return styleModel.weights
+  }
+  const w = styleModel.weights.slice()
+  for (const n of PERCEPTION_FEATURES) w[names.indexOf(n)] *= k
+  perceptionCache.set(k, w)
+  return w
+}
+// the v8 fallback below samples flat off the UNamplified weights; it only runs
+// when the horizon search fails, and it is a different feature set with its
+// own guards
 const PLAY_TEMP = 1.0
 
 // ---------- engine (single-threaded Stockfish 18 lite WASM) ----------
@@ -1432,7 +1512,7 @@ function stylePickV9(lines, shByUci) {
   if (cands.length < 2) return null
   const ctx = decisionContextV9()
   const { sh, bestSh } = horizonScores(cands.map(c => c.uci), shByUci)
-  const w = styleModel.weights
+  const w = v9Weights(ctx.phase)   // score-derived five scaled by this phase's k
   const scored = []
   for (let i = 0; i < cands.length; i++) {
     const x = moveFeaturesV9(cands[i].uci, ctx, sh[i], bestSh, i)
@@ -1443,9 +1523,8 @@ function stylePickV9(lines, shByUci) {
   }
   if (scored.length < 2) return null
   const zmax = Math.max(...scored.map(c => c.z))
-  const temp = playTemp(ctx.phase)
   let total = 0
-  for (const c of scored) { c.p = Math.exp((c.z - zmax) / temp); total += c.p }
+  for (const c of scored) { c.p = Math.exp(c.z - zmax); total += c.p }
   let r = Math.random() * total
   for (const c of scored) { r -= c.p; if (r <= 0) return c.uci }
   return scored[0].uci
