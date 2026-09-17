@@ -885,15 +885,11 @@ async function build() {
   // "how long is this going to take" is the live question. It is the figure the
   // setup page quoted, frozen - a number that keeps revising itself while you
   // watch is a worse answer than a slightly wrong one that holds still.
-  // Every choice that shaped this build, not just the rated one. Someone who
-  // ticked three speeds and uploaded a pile of bot games was being told only
-  // "rated and casual", which described the least of what they did.
-  const chosen = SPEED_ORDER
-    .filter((sp) => state.speeds.has(sp))
-    .map((sp) => (SPEED_LABEL[sp] || sp).toLowerCase())
+  // Who, how many, what kind, and how long. The speed list used to sit in here
+  // too and it was the one part nobody needed at this point - the choice is
+  // already made and the total above it is what it produced.
   const uploaded = $("bots").checked ? state.upload.games.length : 0
   const bits = [`<b>${cap}</b>`, `<b>${n}</b> games`]
-  if (chosen.length) bits.push(chosen.join(", "))
   bits.push($("rated").checked ? "rated only" : "rated and casual")
   if (uploaded) bits.push(`plus <b>${uploaded.toLocaleString("en-US")}</b> bot games`)
   else if ($("bots").checked) bits.push("bot games included")
