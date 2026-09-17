@@ -742,16 +742,6 @@ const OVERHEAD_SECS = 4
  * engine, the JavaScript, the yield, AND a 24% error in decisions per game.
  */
 const LOOP_FACTOR = 3.0
-// Download is done by the time this is used, so it covers probe + fit + book.
-const POST_DOWNLOAD_SECS = 4
-// What is left after scoring finishes: the fit and the opening book.
-const TAIL_SECS = 2
-
-function estimateFromDecisions(points) {
-  const ms = state.msPerDecision || 12.5
-  return POST_DOWNLOAD_SECS + (points * ms * LOOP_FACTOR) / 1000
-}
-
 function estimateSeconds(n) {
   // msPerDecision is the real cost of one decision point - pool search plus
   // every horizon - so there is no correction factor left to apply and nothing
@@ -925,9 +915,8 @@ async function build() {
   state.buildSize = n
   state.scoreT0 = null
   resetSteps()
-  // One run, the length of the whole estimate. Overrun and it closes on 99.2%
-  // by halves without ever arriving; only the build finishing fills it.
-  startBar(state.etaSecs || estimateSeconds(n))
+  // Segment the bar by expected step cost, once, before anything runs.
+  planBar(n)
   show("building", { top: true })
 
   state.abort = new AbortController()
@@ -994,21 +983,61 @@ let stepAt = -1
  * does finish, the bar goes to 100% from wherever it had got to: early or late,
  * completion is the only thing that fills it.
  */
-const BAR_CEILING = 0.94
-// The hard stop: the bar never shows more than this until the build is actually
-// done, so a full bar always means finished and never means "nearly".
 const BAR_HARD_STOP = 99
-// How long the overrun crawl takes, in multiples of the estimate. The old decay
-// spent itself inside one estimate-length and then sat still at its ceiling,
-// which read as a hang. Stretching it means the bar is always travelling - a
-// build that runs to twice its estimate is at 97.2%, four times at 98.3%, eight
-// times at 98.9% - approaching 99 without ever arriving there.
+// How far into its own segment a step may get on the clock alone. Past this it
+// crawls toward - never onto - the segment's end, so overrunning one step can
+// never spend the next one's share of the bar.
+const SEGMENT_CEILING = 0.93
 const OVERRUN_STRETCH = 2
 
+/**
+ * WHAT EACH STEP IS EXPECTED TO COST, worked out before the build starts.
+ *
+ * The bar used to run on one clock for the whole build, re-timed from scoring's
+ * observed rate. That made the end of the build unwatchable: as scoring
+ * finishes its projected remainder goes to zero, so the last re-time handed
+ * everything after it a two-second clock, which expired at once and left fit
+ * and the opening book to inch along in the overrun crawl. The step on screen
+ * when that happened was "Fitting your style", so that is where it looked stuck.
+ *
+ * Each step now owns a share of the bar proportional to what it is expected to
+ * cost, computed up front and fixed for the run. Inside its own share a step
+ * moves at its own rate: a step expected to take two seconds crosses a short
+ * segment quickly, and scoring crosses a long one slowly. Nothing is left
+ * without a budget, so nothing sits still.
+ *
+ * Measured on this machine at 16 and 64 games:
+ *
+ *   download   ~0s      served from the archive scan's cache
+ *   probe      2.04s / 2.15s      flat, whatever the size
+ *   score      20.33s / 87.37s    1.40s a game - about 97% of the build
+ *   fit        under 0.04s at both sizes, but it grows with decision points
+ *   book       1.39s / 0.27s      about a second, noisy
+ *
+ * Scoring is the only one that scales enough to matter, and its figure comes
+ * from calibration rather than from here, so the shares follow the machine.
+ */
+const STEP_MODEL = {
+  download: (n) => 0.5 + n * 0.01,
+  probe: () => 2.1,
+  score: (n) => n * scoringSecondsPerGame(),
+  // Never observed above a twentieth of a second here, but it is an L-BFGS over
+  // a matrix that grows with the games, so it gets a share that grows too -
+  // small enough to cost nothing when it is instant, large enough that a slow
+  // one has somewhere to move.
+  fit: (n) => 1 + n * 0.02,
+  finish: () => 1.2,
+}
+
+function scoringSecondsPerGame() {
+  const ms = state.msPerDecision || 12.5
+  return (DECISIONS_PER_GAME * ms * LOOP_FACTOR) / 1000
+}
+
 let barTimer = null
-let barFrom = 0        // width the current step started at (always 0 today)
-let barStart = 0       // when the current step began
-let barSpan = 1000     // how long we think it will take, in ms
+let segments = []      // [{phase, secs, from, to}] - fractions of the bar
+let segIndex = -1
+let segStart = 0       // when the current segment began
 
 // The note row only exists when it carries something; an always-present empty
 // row would be a fourth, invisible gap in a stack whose spacing is meant to be
@@ -1019,66 +1048,103 @@ function setNote(html) {
   note.parentElement.hidden = !html
 }
 
+let barMax = 0
+
 function paintBar(pct) {
-  $("fill").style.width = Math.max(0, Math.min(100, pct)) + "%"
+  // Monotonic by construction. The re-anchoring above is what keeps the bar
+  // moving smoothly; this is the guarantee that no future arithmetic can walk
+  // it backwards, which is the one thing a progress bar must never do.
+  const v = Math.max(0, Math.min(100, pct))
+  barMax = v < barMax ? barMax : v
+  $("fill").style.width = barMax + "%"
+}
+
+function resetBar() {
+  barMax = 0
+  $("fill").style.width = "0%"
 }
 
 function stopBar() {
   if (barTimer) { clearInterval(barTimer); barTimer = null }
 }
 
-// An ease-out: quick off the mark, slowing as it approaches the ceiling, which
-// is how a progress bar reads as "working" rather than as "counting down".
+/** Carve the bar into one segment per step, sized by expected cost. */
+function planBar(n) {
+  const costs = STEPS.map(([phase]) => Math.max(0.2, (STEP_MODEL[phase] || (() => 1))(n)))
+  const total = costs.reduce((a, b) => a + b, 0)
+  let at = 0
+  segments = STEPS.map(([phase], i) => {
+    const from = at
+    at += (costs[i] / total) * BAR_HARD_STOP
+    return { phase, secs: costs[i], from, to: at }
+  })
+  segIndex = -1
+  stopBar()
+  resetBar()
+}
+
+/**
+ * Enter a step's segment. Any step skipped on the way is simply passed over -
+ * its share is already behind the bar, so the bar jumps forward rather than
+ * losing it.
+ */
+function enterSegment(i) {
+  if (i <= segIndex || !segments[i]) return
+  segIndex = i
+  segStart = performance.now()
+  paintBar(segments[i].from)
+  stopBar()
+  barTimer = setInterval(tickBar, 50)
+}
+
+function tickBar() {
+  const seg = segments[segIndex]
+  if (!seg) return
+  const t = (performance.now() - segStart) / 1000 / seg.secs
+  const span = seg.to - seg.from
+  let f
+  if (t <= 1) {
+    // ease-out: quick off the mark, slowing toward the segment's ceiling
+    f = (1 - Math.pow(1 - t, 2)) * SEGMENT_CEILING
+  } else {
+    // Overrun. Keep closing on the segment's end without reaching it, so the
+    // step still looks alive and still cannot spend the next step's share.
+    f = 1 - (1 - SEGMENT_CEILING) * Math.exp(-(t - 1) / OVERRUN_STRETCH)
+  }
+  paintBar(seg.from + span * f)
+}
+
+// Where along its segment the bar currently sits, 0..1 - the inverse of the
+// easing in tickBar. Needed so a retime can keep the bar exactly where it is.
+function segFraction(f) {
+  if (f <= SEGMENT_CEILING) return 1 - Math.sqrt(Math.max(0, 1 - f / SEGMENT_CEILING))
+  return 1 - OVERRUN_STRETCH * Math.log(Math.max(1e-6, (1 - f) / (1 - SEGMENT_CEILING)))
+}
+
+/**
+ * Scoring is the long pole and its rate varies, so its segment is re-sized from
+ * observed throughput. Re-sizing alone moved the bar BACKWARDS - a longer
+ * segment means the same elapsed time is a smaller fraction of it, and a real
+ * build showed a 0.59% step back at 7.3s. So the clock is re-anchored to hold
+ * the painted position: only the rate from here changes.
+ */
+function retimeScoring(seconds) {
+  const seg = segments[segIndex]
+  if (!seg || seg.phase !== "score") return
+  const elapsed = (performance.now() - segStart) / 1000
+  const held = segFraction((currentPct() - seg.from) / (seg.to - seg.from))
+  seg.secs = Math.max(0.5, elapsed + seconds)
+  segStart = performance.now() - held * seg.secs * 1000
+}
+
 function currentPct() {
   return parseFloat($("fill").style.width) || 0
 }
 
-/**
- * Re-time the bar mid-flight without moving it.
- *
- * The setup estimate is games x an average decisions-per-game, and game LENGTH
- * varies far more than game count does - a 36-game build measured 0.78s a game
- * against 1.41s for a 72-game one, purely because the games were shorter. Once
- * the download lands, the exact number of decision points is known, so the bar
- * stops extrapolating and starts running on the real figure.
- *
- * It re-anchors rather than restarting: the curve picks up from whatever width
- * is already painted, so the bar never jumps or goes backwards - the only thing
- * that changes is how fast it moves from here.
- */
-function repaceBar(seconds) {
-  startBar(seconds, currentPct())
-}
-
-function startBar(seconds, from = 0) {
-  stopBar()
-  barFrom = from
-  barStart = performance.now()
-  barSpan = Math.max(600, seconds * 1000)
-  // paint the anchor, not zero - re-pacing mid-build must not snap the bar back
-  paintBar(barFrom)
-  barTimer = setInterval(() => {
-    const t = (performance.now() - barStart) / barSpan
-    if (t <= 1) {
-      // ease-out to the ceiling: quick off the mark, slowing as it approaches
-      const eased = 1 - Math.pow(1 - t, 2)
-      paintBar(barFrom + eased * (BAR_CEILING * 100 - barFrom))
-    } else {
-      // Past the estimate. An estimate is a guess and some machines are slow,
-      // so rather than freezing at the ceiling - which reads as a hang - the
-      // bar keeps closing on the hard stop, just far more slowly than it was
-      // moving before. Always travelling, never arriving; only the build
-      // actually finishing fills it.
-      const over = t - 1
-      const ceil = Math.max(BAR_CEILING * 100, barFrom)
-      paintBar(BAR_HARD_STOP - (BAR_HARD_STOP - ceil) * Math.exp(-over / OVERRUN_STRETCH))
-    }
-  }, 50)
-}
-
 function completeBar() {
   stopBar()
-  paintBar(100)
+  barMax = 100
+  $("fill").style.width = "100%"
 }
 
 function resetSteps() {
@@ -1122,6 +1188,7 @@ function enterStep(i) {
     if (!$("step-" + STEPS[k][0])) $("steps").appendChild(stepRow(k))
   }
   stepAt = i
+  enterSegment(i)
 }
 
 function finishSteps() {
@@ -1138,7 +1205,13 @@ function onProgress(p) {
   // the only figure that actually predicts how long scoring will take.
   if (p.phase === "plan") {
     state.decisions = p.total
-    repaceBar(estimateFromDecisions(p.total))
+    // The true decision count retires the decisions-per-game guess, so scoring's
+    // share can be corrected. Only its SIZE changes; the bar does not move.
+    const seg = segments.find((x) => x.phase === "score")
+    if (seg) {
+      const ms = state.msPerDecision || 12.5
+      seg.secs = Math.max(0.5, (p.total * ms * LOOP_FACTOR) / 1000)
+    }
     return
   }
 
@@ -1157,7 +1230,7 @@ function onProgress(p) {
     if (frac > 0.1 && elapsed - state.lastRepace > 2) {
       state.lastRepace = elapsed
       const projectedScoring = elapsed / frac
-      repaceBar(Math.max(1, projectedScoring - elapsed + TAIL_SECS))
+      retimeScoring(Math.max(0.5, projectedScoring - elapsed))
     }
     // fall through: the step row still wants its "game 5 of 24" detail
   }
