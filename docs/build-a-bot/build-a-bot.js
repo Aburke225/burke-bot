@@ -30,7 +30,8 @@ const state = {
   counts: {},          // speed -> pooled game count
   speeds: new Set(),
   autoOff: new Set(),   // speeds the rated filter emptied, to be revived when it lifts
-  msPerPosition: null, // from engine.calibrate()
+  msPerPosition: null, // one pool search, from engine.calibrate()
+  msPerDecision: null, // a whole decision point: pool search + every horizon
   cap: 400,            // device-calibrated ceiling
   bot: null,           // { weights, book, levers, stats, meta }
   engine: null,
@@ -680,36 +681,52 @@ function quality(n) {
 /**
  * How long a build of n games takes.
  *
- * ~27.7 decision points a game, each costing one calibrated engine search, is
- * the scoring pass - the long pole but NOT the whole job. Downloading, the
- * probe, the fit and the opening book all take real time that a scoring-only
- * figure silently omits, which is why the number used to read low. OVERHEAD
- * and SCORING_FACTOR carry those, both measured against real builds rather
- * than reasoned about.
+ * ~27.7 decision points a game, each costing one CALIBRATED DECISION - the pool
+ * search plus one search per horizon, which is what engine.calibrate() now
+ * times. The old version priced a decision at one search and was about five
+ * times light; worse, the shortfall was machine-shaped, so no constant could
+ * fix it for every device. Nothing here is tuned to a particular processor now.
+ *
+ * OVERHEAD_SECS is the rest of the job - download, probe, fit, opening book -
+ * which a scoring-only figure omits entirely. It is roughly flat in n and small
+ * beside the scoring pass, so one measured number covers it.
  */
-const DECISIONS_PER_GAME = 27.7
+// 34.3, counted over 72 real games rather than assumed: every move the player
+// made after the opening ply. The old 27.7 was 24% light on its own.
+const DECISIONS_PER_GAME = 34.3
 const OVERHEAD_SECS = 4
-// Measured, because the old estimate was not close. Four real builds on one
-// machine, newest-first from the same archive, with a repeat of the smallest
-// afterwards as a control (16.0s against 17.2s originally - so no drift to
-// explain the curve away):
-//
-//     games   predicted   actual
-//        12        30s     17.2s
-//        36        33s     32.0s
-//        72        40s    104.6s
-//
-// The old figure counted the scoring pass only and trusted calibrate(), which
-// under-reports what scoring actually costs by roughly five times: ~9.5ms a
-// position against ~50ms measured. This factor closes that gap. It lands within
-// a few seconds at 12 and 72 games and runs high at 36 - deliberately the safer
-// direction, since a build that beats its estimate is a good surprise and one
-// that doubles it is not.
-const SCORING_FACTOR = 5.3
+
+/**
+ * What calibration cannot see.
+ *
+ * scoreAll yields to the browser once per decision point so the page keeps
+ * painting. On a quiet page that yield is free, which is exactly why measuring
+ * it during calibration does not help - the setup screen is idle. During a
+ * build the spinner and the progress bar are animating, so the same yield waits
+ * for a render and costs about 28ms. Measured per decision:
+ *
+ *     engine, four searches   9.0ms   calibrated per machine
+ *     v9 feature extraction   3.6ms   calibrated per machine
+ *     yield while animating  ~28ms    this factor
+ *
+ * The two that scale with the device are now measured on the device. What is
+ * left is the browser's rendering cadence, which is far more uniform across
+ * machines than wasm or JS throughput - so this travels much better than the
+ * single 5.3x constant it replaces, which was standing in for all four of the
+ * engine, the JavaScript, the yield, AND a 24% error in decisions per game.
+ */
+const LOOP_FACTOR = 3.0
 
 function estimateSeconds(n) {
-  const ms = state.msPerPosition || 11
-  return OVERHEAD_SECS + (n * DECISIONS_PER_GAME * ms * SCORING_FACTOR) / 1000
+  // msPerDecision is the real cost of one decision point - pool search plus
+  // every horizon - so there is no correction factor left to apply and nothing
+  // tuned to the machine this was written on. 50 is the fallback before the
+  // engine has calibrated, which is this machine's measured figure and only
+  // ever stands in for the second or two before the real one arrives.
+  // 12.5 is this machine's calibrated figure, standing in for the second or two
+  // before the real one arrives.
+  const ms = state.msPerDecision || 12.5
+  return OVERHEAD_SECS + (n * DECISIONS_PER_GAME * ms * LOOP_FACTOR) / 1000
 }
 
 function prettyTime(secs) {
@@ -814,18 +831,24 @@ async function ensureEngine() {
   const { createEngine } = await import("./engine.js")
   state.engine = await createEngine({})
   try {
-    const cal = await state.engine.calibrate()
-    state.msPerPosition = cal.msPerPosition
+    // Calibrate on a WHOLE decision - engine plus this app's own feature work -
+    // because the engine is under a fifth of it. build.js owns that path, so it
+    // owns the measurement; engine.calibrate() is kept for the engine-only
+    // figure, which is still worth having for diagnostics.
+    const { calibrateDecision } = await import("./build.js")
+    const cal = await calibrateDecision(state.engine)
+    state.msPerDecision = cal.msPerDecision
+    state.msPerPosition = null
     // iOS suspends a page the moment the user switches apps, so a phone run has
     // to fit inside one uninterrupted look at the screen. ~60s of engine time.
     const phone = window.matchMedia("(max-width: 860px)").matches
     if (phone) {
-      state.cap = Math.max(25, Math.min(150, Math.round(60000 / (state.msPerPosition * 27.7))))
+      state.cap = Math.max(25, Math.min(150, Math.round(60000 / (state.msPerDecision * LOOP_FACTOR * DECISIONS_PER_GAME))))
       const note = $("mobile-note")
       note.textContent = "To train on all of your games, use a desktop or laptop."
       note.hidden = false
     } else {
-      state.cap = Math.max(50, Math.round(120000 / (state.msPerPosition * 27.7)))
+      state.cap = Math.max(50, Math.round(120000 / (state.msPerDecision * LOOP_FACTOR * DECISIONS_PER_GAME)))
     }
     updateSlider()
   } catch (e) { /* calibration is an optimisation, not a requirement */ }

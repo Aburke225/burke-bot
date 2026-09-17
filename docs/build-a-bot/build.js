@@ -61,7 +61,10 @@ const MIN_POOL_DEPTH = 4
 const MAX_POOL_DEPTH = 8
 // The three horizons computed in one pass. pipeline/analyse.py fixed this at 2;
 // here all three are measured and the fit chooses. See runFits().
-const HORIZONS = [1, 2, 3]
+// Exported so engine.calibrate() can be handed the real list: a decision point
+// costs one pool search plus one search per horizon, and a calibration that
+// guesses that list would go quietly wrong the day this one changes.
+export const HORIZONS = [1, 2, 3]
 // Widths the probe prices. Width is very nearly free - measured on this
 // engine at 11.5 / 11.1 / 10.9 ms for width 10 / 20 / 32 at depth 5 - so the
 // only reason not to take 32 is the design matrix it produces.
@@ -1038,6 +1041,92 @@ function normaliseOpts(opts) {
  * @returns {Promise<{weights, book, levers, stats}>} plus bookMap, fit and
  *   timing as extras. `book` is a share.js trie, ready for share.encode().
  */
+/**
+ * How long ONE decision point costs on this machine, engine and JavaScript both.
+ *
+ * This lives here, not in engine.js, because the engine is the smaller half.
+ * Measured on real positions: the four searches a decision needs - the pool
+ * search plus one per horizon - come to about 9.7ms, while the whole decision
+ * costs about 50ms. Four fifths of the work is this file's own JavaScript:
+ * constructing a Chess, building the context, and running v9.features over
+ * every candidate in the pool. An engine-only calibration therefore cannot
+ * produce an accurate estimate no matter how carefully it times the engine,
+ * which is exactly how the old figure came to be five times light.
+ *
+ * Timing the real path is also what makes the estimate portable. A phone is not
+ * uniformly slower than a laptop - its wasm engine and its JavaScript are slower
+ * by different factors - so any fixed correction is only ever right on the
+ * machine it was measured on.
+ */
+export async function calibrateDecision(engine, opts = {}) {
+  const fens = opts.fens || CALIBRATION_FENS
+  const multipv = opts.multipv || 20   // the default pool width, as in runProbe
+  const poolDepth = opts.poolDepth || DEFAULT_POOL_DEPTH
+  // scoreAll yields once per decision point so the page keeps painting, and on
+  // this browser that yield is the single most expensive thing a decision does
+  // - more than the engine and the feature work put together. Calibrating
+  // without it measured a third of the real cost. It is deliberate work, so it
+  // gets deliberately measured.
+  const breathe = makeYielder()
+  const times = []
+
+  for (const fen of fens) {
+    const t = nowMs()
+    const lines = await engine.analyse(fen, poolDepth, multipv)
+    const cands = lines.filter((l) => l && l.uci).slice(0, multipv)
+    if (cands.length < 2) continue
+    const ucis = cands.map((c) => c.uci)
+
+    const shMaps = []
+    for (const h of HORIZONS) {
+      const hl = await engine.analyse(fen, h, multipv)
+      const m = new Map()
+      for (const l of hl) if (l && l.uci) m.set(l.uci, l.cp)
+      shMaps.push(m)
+    }
+
+    // The same JavaScript scoreAll does per point, in the same order.
+    const chess = new Chess(fen)
+    const ctx = makeContext(chess, null, null, null, null)
+    const bases = new Array(cands.length)
+    for (let i = 0; i < cands.length; i++) bases[i] = features(chess, ucis[i], ctx, null, null, i)
+    const horizons = HORIZONS.map((_, hi) => horizonScores(ucis, shMaps[hi]))
+    const hcols = HORIZONS.map(() => new Float64Array(cands.length * 4))
+    for (let i = 0; i < cands.length; i++) {
+      if (!bases[i]) continue
+      for (let hi = 0; hi < HORIZONS.length; hi++) {
+        patchHorizon(hcols[hi], i * 4, bases[i], ctx.imbalance, horizons[hi].sh[i], horizons[hi].bestSh)
+      }
+    }
+    await breathe()
+    times.push(nowMs() - t)
+  }
+
+  if (!times.length) return { msPerDecision: null, samples: [] }
+  // Drop the first: it pays for JIT warm-up and a cold table.
+  const timed = times.length > 1 ? times.slice(1) : times
+  const sorted = [...timed].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+  return {
+    msPerDecision: Math.round(median * 10) / 10,
+    samples: times.map((x) => Math.round(x * 10) / 10),
+    poolDepth, multipv, horizons: HORIZONS.slice(),
+  }
+}
+
+// Middlegame positions with a normal number of legal moves (34.5 on average,
+// against 37.8 measured across real decision points), so the pool search has a
+// realistic amount to chew on.
+const CALIBRATION_FENS = [
+  "r1bqkb1r/pp2nppp/2n1p3/3pP3/3P4/2N2N2/PP3PPP/R1BQKB1R w KQkq - 0 8",
+  "r2q1rk1/pb1nbppp/1p2pn2/2pp4/2PP4/1PN1PN2/PB3PPP/R2QKB1R w KQ - 0 9",
+  "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 7",
+  "2rq1rk1/pb2bppp/1pn1pn2/3p4/2PP4/1PN1PN2/PB2BPPP/R2Q1RK1 w - - 0 11",
+  "r1b2rk1/pp1nqppp/2p1pn2/3p4/2PP4/2NBPN2/PP3PPP/R1BQ1RK1 w - - 0 9",
+  "r2qr1k1/1b1nbppp/p2ppn2/1p6/3NP3/1BN1BP2/PPPQ2PP/2KR3R w - - 0 12",
+]
+
 export async function buildBot(opts, onProgress) {
   const o = normaliseOpts(opts)
   const report = reporter(onProgress)

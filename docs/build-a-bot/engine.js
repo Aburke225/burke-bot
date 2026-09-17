@@ -75,6 +75,10 @@ const CALIBRATION_FENS = [
 // POOL_DEPTH and MULTIPV. calibrate() must time THIS, not something cheaper.
 const CALIBRATION_DEPTH = 5
 const CALIBRATION_MULTIPV = 20
+// Mirrors build.js's HORIZONS. The caller passes the real list (the controller
+// imports it from build.js) so these cannot drift apart unnoticed; this is only
+// the fallback for a caller that does not.
+const CALIBRATION_HORIZONS = [1, 2, 3]
 
 // mate_score=10000, from pipeline/analyse.py's score(mate_score=10000).
 const MATE_SCORE = 10000
@@ -490,26 +494,47 @@ function bootEngine({ jsUrl, acquired, hashMiB, bootTimeoutMs, analysisTimeoutMs
      *   dropped: the first search pays for JIT warm-up and a cold TT, and the
      *   mean of a small sample is at the mercy of one scheduler hiccup.
      */
-    async calibrate({ fens = CALIBRATION_FENS, depth = CALIBRATION_DEPTH, multipv = CALIBRATION_MULTIPV } = {}) {
+    async calibrate({ fens = CALIBRATION_FENS, depth = CALIBRATION_DEPTH,
+                      multipv = CALIBRATION_MULTIPV, horizons = CALIBRATION_HORIZONS } = {}) {
       await boot
-      const samples = []
+      // TIME THE WHOLE DECISION, not one search of it. Scoring a single decision
+      // point costs FOUR searches - the pool search at `depth`, then one at each
+      // horizon - and timing only the first understated the build by about five
+      // times. Worse, the shortfall was machine-shaped: how much cheaper a
+      // depth-1 search is than a depth-5 one depends on the processor, the wasm
+      // build and how well quiescence predicts, so no single fudge factor could
+      // travel. Measuring the same mix the build actually performs is what makes
+      // the estimate portable.
+      const pool = []
+      const full = []
       const t0 = now()
       for (const fen of fens) {
         const t = now()
         await engine.analyse(fen, depth, multipv)
-        samples.push(now() - t)
+        pool.push(now() - t)
+        for (const h of horizons) await engine.analyse(fen, h, multipv)
+        full.push(now() - t)
       }
       const totalMs = now() - t0
-      const timed = samples.length > 1 ? samples.slice(1) : samples
-      const sorted = [...timed].sort((a, b) => a - b)
-      const mid = Math.floor(sorted.length / 2)
-      const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+      // Drop the first: it pays for JIT warm-up and a cold table, and the mean
+      // of a small sample is at the mercy of one scheduler hiccup.
+      const med = (xs) => {
+        const t = xs.length > 1 ? xs.slice(1) : xs
+        const sorted = [...t].sort((a, b) => a - b)
+        const mid = Math.floor(sorted.length / 2)
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+      }
+      const r1 = (x) => Math.round(x * 10) / 10
       return {
-        msPerPosition: Math.round(median * 10) / 10,
-        samples: samples.map(s => Math.round(s * 10) / 10),
+        // what a decision point costs: the number the estimate wants
+        msPerDecision: r1(med(full)),
+        // the pool search alone, kept for diagnostics and for anything that
+        // genuinely does one search
+        msPerPosition: r1(med(pool)),
+        samples: full.map(r1),
+        poolSamples: pool.map(r1),
         totalMs: Math.round(totalMs),
-        depth,
-        multipv,
+        depth, multipv, horizons,
       }
     },
 
