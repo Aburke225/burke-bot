@@ -872,6 +872,9 @@ async function build() {
     `<span class="eta"><span>&middot;</span> about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b> to build</span>`
   state.buildSize = n
   resetSteps()
+  // One run, the length of the whole estimate. Overrun and it closes on 99.2%
+  // by halves without ever arriving; only the build finishing fills it.
+  startBar(state.etaSecs || estimateSeconds(n))
   show("building", { top: true })
 
   state.abort = new AbortController()
@@ -931,26 +934,15 @@ let stepAt = -1
  * between, and the probe and fit phases report a handful of times in total. The
  * information was honest and the motion was useless.
  *
- * So each step gets a time estimate and the bar walks that estimate smoothly.
- * Two rules keep it from lying. It never passes CEILING on the clock alone, so
- * a step that overruns leaves the bar parked just short of full instead of
- * claiming to be finished. And when the step really does end, the bar goes to
- * 100% wherever it had got to - early or late, completion is what fills it.
+ * So the bar walks the WHOLE build's estimate, once, start to finish. Two rules
+ * keep it from lying. It never passes CEILING on the clock alone, so a build
+ * that overruns leaves the bar closing on 99.2% by halves - always moving,
+ * never arriving - instead of claiming to be done. And when the build really
+ * does finish, the bar goes to 100% from wherever it had got to: early or late,
+ * completion is the only thing that fills it.
  */
 const BAR_CEILING = 0.94
 const BAR_ASYMPTOTE = 99.2
-// Seconds per step, scaled by the size of the job where the job has a size.
-// Measured on this machine against real builds rather than guessed: scoring is
-// the long pole at roughly 2.8s a game (about thirty decisions, each a depth-5
-// MultiPV-20 search), and the probe is a fixed ~12s of calibration whatever the
-// build size. They set the PACE only - the real event is what ends a step.
-const STEP_SECONDS = {
-  download: (n) => 2 + n * 0.02,
-  probe: () => 12,
-  score: (n) => 3 + n * 2.8,
-  fit: () => 8,
-  finish: () => 4,
-}
 
 let barTimer = null
 let barFrom = 0        // width the current step started at (always 0 today)
@@ -1033,8 +1025,11 @@ function detailOf(label) {
 }
 
 function enterStep(i) {
-  // whatever the bar had reached, the step ending is what fills it
-  if (stepAt >= 0) completeBar()
+  // The bar is NOT touched here. It runs once, across the whole estimate, so
+  // that its position answers "how much longer" rather than "how far into a
+  // stage whose length you have no idea about". Restarting it per step also
+  // meant any step the clock mispriced showed an empty bar going nowhere - the
+  // fit stage, at a flat guess of eight seconds, was reliably that step.
   for (let k = Math.max(stepAt, 0); k < i; k++) {
     const done = $("step-" + STEPS[k][0])
     if (done) { done.className = "step done"; done.querySelector(".detail").textContent = "" }
@@ -1043,8 +1038,6 @@ function enterStep(i) {
     if (!$("step-" + STEPS[k][0])) $("steps").appendChild(stepRow(k))
   }
   stepAt = i
-  const est = STEP_SECONDS[STEPS[i][0]]
-  startBar(est ? est(state.buildSize || 0) : 5)
 }
 
 function finishSteps() {
