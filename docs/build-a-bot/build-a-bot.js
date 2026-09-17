@@ -913,7 +913,8 @@ async function build() {
   $("recap-building").innerHTML = joinBits(bits) +
     `<span class="eta">${SEP}about <b>${prettyTime(state.etaSecs || estimateSeconds(n))}</b> to build</span>`
   state.buildSize = n
-  state.scoreT0 = null
+  state.paceT0 = {}
+  state.lastPace = {}
   resetSteps()
   // Segment the bar by expected step cost, once, before anything runs.
   planBar(n)
@@ -1021,11 +1022,15 @@ const STEP_MODEL = {
   download: (n) => 0.5 + n * 0.01,
   probe: () => 2.1,
   score: (n) => n * scoringSecondsPerGame(),
-  // Never observed above a twentieth of a second here, but it is an L-BFGS over
-  // a matrix that grows with the games, so it gets a share that grows too -
-  // small enough to cost nothing when it is instant, large enough that a slow
-  // one has somewhere to move.
-  fit: (n) => 1 + n * 0.02,
+  // The heaviest step after scoring, and for a while the measurements said it
+  // was free. They were wrong for the same reason the bar looked stuck: the fit
+  // starves timers, so a setInterval sampler recorded nothing and the row was
+  // already done when sampling resumed. Sampled on animation frames instead it
+  // takes 18.7s at 30 games - twice the scoring pass in that run - which is what
+  // 153 separate L-BFGS runs cost (ten L2 values by five folds, plus a final,
+  // for each of three horizons). At about 34 decisions a game that is ~18ms of
+  // fitting per decision point.
+  fit: (n) => (n * DECISIONS_PER_GAME * 18) / 1000,
   finish: () => 1.2,
 }
 
@@ -1064,8 +1069,23 @@ function resetBar() {
   $("fill").style.width = "0%"
 }
 
+/**
+ * The bar runs on ANIMATION FRAMES, not a timer.
+ *
+ * The fit yields every few L-BFGS iterations through scheduler.yield(), which
+ * hands control back to the browser but resumes its continuation at a higher
+ * priority than timers. The browser keeps painting; setInterval does not get a
+ * turn. Measured on one 30-game build with both samplers running at once:
+ * setInterval's worst gap was 19,049ms - the entire fit - while animation
+ * frames never went longer than 1,976ms. So the bar froze for nineteen seconds
+ * on the fit step with its own clock stopped, which no amount of budgeting the
+ * segments could have fixed.
+ *
+ * A frame callback is also the honest place for this: if frames are not being
+ * produced, nothing on screen is changing anyway.
+ */
 function stopBar() {
-  if (barTimer) { clearInterval(barTimer); barTimer = null }
+  if (barTimer) { cancelAnimationFrame(barTimer); barTimer = null }
 }
 
 /** Carve the bar into one segment per step, sized by expected cost. */
@@ -1094,7 +1114,8 @@ function enterSegment(i) {
   segStart = performance.now()
   paintBar(segments[i].from)
   stopBar()
-  barTimer = setInterval(tickBar, 50)
+  const frame = () => { tickBar(); barTimer = requestAnimationFrame(frame) }
+  barTimer = requestAnimationFrame(frame)
 }
 
 function tickBar() {
@@ -1122,15 +1143,19 @@ function segFraction(f) {
 }
 
 /**
- * Scoring is the long pole and its rate varies, so its segment is re-sized from
- * observed throughput. Re-sizing alone moved the bar BACKWARDS - a longer
- * segment means the same elapsed time is a smaller fraction of it, and a real
- * build showed a 0.59% step back at 7.3s. So the clock is re-anchored to hold
- * the painted position: only the rate from here changes.
+ * Re-size the segment in flight from what it is actually achieving.
+ *
+ * Both the long steps report their own progress, and both vary by more than any
+ * up-front figure can predict - scoring with engine warmth and game length, the
+ * fit with how quickly L-BFGS converges. Re-sizing alone moved the bar
+ * BACKWARDS, though: a longer segment makes the same elapsed time a smaller
+ * fraction of it, and a real build showed a 0.59% step back at 7.3s. So the
+ * clock is re-anchored to hold the painted position, and only the rate from
+ * here changes.
  */
-function retimeScoring(seconds) {
+function retimeSegment(phase, seconds) {
   const seg = segments[segIndex]
-  if (!seg || seg.phase !== "score") return
+  if (!seg || seg.phase !== phase) return
   const elapsed = (performance.now() - segStart) / 1000
   const held = segFraction((currentPct() - seg.from) / (seg.to - seg.from))
   seg.secs = Math.max(0.5, elapsed + seconds)
@@ -1220,17 +1245,20 @@ function onProgress(p) {
   // the same size differ by more than a third depending on how long the games
   // are and how the engine warms, so a figure fixed before the first move was
   // read can only ever be close. From here the bar runs on observed throughput.
-  if (p.phase === "score" && p.total) {
-    if (state.scoreT0 == null) { state.scoreT0 = performance.now(); state.lastRepace = 0 }
+  if ((p.phase === "score" || p.phase === "fit") && p.total) {
+    const k = p.phase
+    state.paceT0 = state.paceT0 || {}
+    state.lastPace = state.lastPace || {}
+    if (state.paceT0[k] == null) { state.paceT0[k] = performance.now(); state.lastPace[k] = 0 }
     const frac = p.done / p.total
-    const elapsed = (performance.now() - state.scoreT0) / 1000
+    const elapsed = (performance.now() - state.paceT0[k]) / 1000
     // Wait for a tenth of the work before believing the rate, and re-pace at
     // most twice a second: an estimate that twitches is worse than one slightly
     // behind.
-    if (frac > 0.1 && elapsed - state.lastRepace > 2) {
-      state.lastRepace = elapsed
-      const projectedScoring = elapsed / frac
-      retimeScoring(Math.max(0.5, projectedScoring - elapsed))
+    if (frac > 0.1 && elapsed - state.lastPace[k] > 2) {
+      state.lastPace[k] = elapsed
+      const projected = elapsed / frac
+      retimeSegment(k, Math.max(0.5, projected - elapsed))
     }
     // fall through: the step row still wants its "game 5 of 24" detail
   }
