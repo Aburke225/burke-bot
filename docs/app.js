@@ -57,7 +57,47 @@ const EVAL_DEPTH = 18
 // 0.65 the bot captured 31.5% of the time against my 27.4% and checked 12.2%
 // against my 10.3%. Note mean-probability-on-my-move is NOT the metric to tune
 // this with: it rises as T falls simply because argmax scores 1 when right.
-// keep in sync with PLAY_TEMP in pipeline/audit.py
+// ...and that is still true of the WHOLE game measured as one number. What it
+// misses is that his own accuracy is not one number: his average loss runs
+// 53.9cp in the opening, 140.4 in the midgame, 215.0 in the endgame and 348.7
+// once the board is nearly bare. Cloned faithfully at T=1 the bot inherits all
+// of that, and a tail move that is survivable at move 8 decides the game at
+// move 60 - his words, "mistakes in those situations are significantly more
+// costly", and the arithmetic agrees.
+//
+// So the temperature is now a schedule over phase (1 - pieceCount/32), chosen
+// by him. Out of fold over the same 9,431 decisions, expected loss against the
+// depth-5 pool:
+//
+//   phase          T      him     T=1.0     sched     feature mismatch
+//   <0.15       1.00     53.9      58.9      58.9     0.0048 -> 0.0048
+//   0.15-0.40   0.85    140.4     137.4     120.7     0.0039 -> 0.0107
+//   0.40-0.60   0.75    215.0     239.9     191.8     0.0048 -> 0.0122
+//   >=0.60      0.65    348.7     284.3     232.5     0.0061 -> 0.0129
+//   whole game          167.0     162.1     137.5
+//
+// The cost is real and is the one the T=1 argument above names: sharpening
+// biases every behaviour at once, not just the one being aimed at. Across the
+// whole game it lands at captures 29.1% against his 27.4% and checks 11.6%
+// against his 10.3%. That is far milder than a flat T=0.65 (31.5% captures),
+// because the opening - where he is already accurate and most of his moves are
+// played - keeps T=1 and is left exactly as measured.
+//
+// WHY NOT DEEPER SEARCH, which is what was asked for first: the weights were
+// fitted against a depth-5 pool and depth-2 horizon scores, so engine_rank,
+// horizon_loss_log and horizon_winprob all mean "at those depths". Changing
+// either depth at play time leaves the weights applied to different
+// quantities. It would also not have worked: split by phase, the coefficient
+// on badness only a deeper search reveals is -0.027 / -0.173 / -0.164 / -0.009
+// from opening to bare board, never once distinguishable from zero, and it is
+// FLATTEST exactly where a deeper horizon was expected to show up.
+const PHASE_TEMP = [[0.15, 1.00], [0.40, 0.85], [0.60, 0.75], [Infinity, 0.65]]
+function playTemp(phase) {
+  for (const [upTo, t] of PHASE_TEMP) if (phase < upTo) return t
+  return 0.65
+}
+// the v8 fallback below still samples flat; it only runs when the horizon
+// search fails, and it is a different feature set with its own guards
 const PLAY_TEMP = 1.0
 
 // ---------- engine (single-threaded Stockfish 18 lite WASM) ----------
@@ -1403,8 +1443,9 @@ function stylePickV9(lines, shByUci) {
   }
   if (scored.length < 2) return null
   const zmax = Math.max(...scored.map(c => c.z))
+  const temp = playTemp(ctx.phase)
   let total = 0
-  for (const c of scored) { c.p = Math.exp((c.z - zmax) / PLAY_TEMP); total += c.p }
+  for (const c of scored) { c.p = Math.exp((c.z - zmax) / temp); total += c.p }
   let r = Math.random() * total
   for (const c of scored) { r -= c.p; if (r <= 0) return c.uci }
   return scored[0].uci

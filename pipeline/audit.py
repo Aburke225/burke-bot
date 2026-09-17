@@ -258,7 +258,10 @@ def profile_bot(engine, n_games):
                             if i == 0 or ((best_cp <= -200 or best_cp - cp < 250)
                                           and not guarded(c, x))]
                 z = np.array([float(np.dot(w, [cands[i][2][j] for j in active])) for i in keep])
-                z = z / PLAY_TEMP  # keep in sync with PLAY_TEMP in docs/app.js
+                # NOT the shipped temperature any more: this profiles the v8
+                # policy (train_style features + the old guards), while the site
+                # plays v9 on a phase schedule - see PHASE_TEMP in docs/app.js
+                z = z / PLAY_TEMP
                 p = np.exp(z - z.max()); p /= p.sum()
                 pick = keep[rng.choices(range(len(keep)), weights=p.tolist())[0]]
                 move, my_cp, x = cands[pick]
