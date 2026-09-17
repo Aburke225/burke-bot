@@ -418,7 +418,9 @@ function renderCaptures() {
   // Only the moves up to the ply being VIEWED, so stepping back through the
   // game un-takes the pieces instead of showing the final tally at move 3.
   const hist = chess.history({ verbose: true })
-  const upto = viewPly === -1 ? hist.length : viewPly
+  // clamped, not trusted: viewPly names a ply in whatever game was on screen
+  // when it was set, so a shorter history must not be read past its end
+  const upto = viewPly === -1 ? hist.length : Math.min(viewPly, hist.length)
   const taken = { w: {}, b: {} }
   for (let i = 0; i < upto; i++) {
     const m = hist[i]
@@ -460,6 +462,17 @@ function paintCaptures(el, counts, colour, advantage) {
 }
 
 function renderMoves() {
+  // FIRST, before anything reads it: any real move - and any new game - snaps
+  // history browsing back to the live position. This used to sit at the end of
+  // the function, below the renderCaptures() call that reads it, which meant
+  // newGame() and playAgain() reached renderCaptures() with the ply the player
+  // had been browsing in the PREVIOUS game and an empty history to read it
+  // against. hist[0] was undefined and "reading 'captured'" threw, aborting
+  // the new game before it could clear the end screen - Play again went dead
+  // and the page needed a reload. It also left the capture rows describing the
+  // browsed ply when a bot move landed while the player was looking back.
+  viewPly = -1
+  endHiddenForBrowse = false
   renderPlayers()
   renderCaptures()
   const hist = chess.history()
@@ -488,9 +501,6 @@ function renderMoves() {
   if (last) last.classList.add("cur")
   fitMoveList()
   revealCurrentMove()
-  // any real move snaps history browsing back to the live position
-  viewPly = -1
-  endHiddenForBrowse = false
   try { if (boardRef) boardRef.removeMarkers(MARKER_TYPE.square) } catch (e) {}
 }
 
