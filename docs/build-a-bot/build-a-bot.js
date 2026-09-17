@@ -936,7 +936,7 @@ async function build() {
       signal: state.abort.signal,
       engine,
     }, onProgress)
-    finishSteps()
+    await finishSteps()
     await finish(bot, accounts)
   } catch (err) {
     if (err && (err.name === "AbortError" || /abort/i.test(err.message || ""))) {
@@ -1099,8 +1099,13 @@ function planBar(n) {
     return { phase, secs: costs[i], from, to: at }
   })
   segIndex = -1
+  targetStep = -1
+  stepShownAt = 0
   stopBar()
   resetBar()
+  // running from the start, so the first step's hold is timed by it too
+  const frame = () => { tickBar(); barTimer = requestAnimationFrame(frame) }
+  barTimer = requestAnimationFrame(frame)
 }
 
 /**
@@ -1119,6 +1124,7 @@ function enterSegment(i) {
 }
 
 function tickBar() {
+  advanceSteps()
   const seg = segments[segIndex]
   if (!seg) return
   const t = (performance.now() - segStart) / 1000 / seg.secs
@@ -1199,6 +1205,35 @@ function detailOf(label) {
   return i === -1 ? "" : label.slice(i + 3)
 }
 
+/**
+ * The shortest time a step may be on screen before the next one replaces it.
+ *
+ * Downloading and the opening book are both near-instant when the archive scan
+ * has already cached the games, so their rows appeared and vanished inside a
+ * frame or two - a line of text nobody could read. Each step now holds its turn
+ * for about a second whatever it actually cost, which is the difference between
+ * a checklist and a flicker.
+ *
+ * The queue is drained from the animation-frame loop rather than a timer, for
+ * the reason the bar is: the fit starves timers for the whole of its run, so a
+ * setTimeout-based hold would simply not fire.
+ */
+const MIN_STEP_MS = 900
+let targetStep = -1
+let stepShownAt = 0
+
+/** The build says a step began; the display gets there when it is ready. */
+function requestStep(i) {
+  if (i > targetStep) targetStep = i
+}
+
+/** Called every frame: let the display catch up, one step at a time. */
+function advanceSteps() {
+  if (targetStep <= stepAt) return
+  if (stepAt >= 0 && performance.now() - stepShownAt < MIN_STEP_MS) return
+  enterStep(stepAt + 1)
+}
+
 function enterStep(i) {
   // The bar is NOT touched here. It runs once, across the whole estimate, so
   // that its position answers "how much longer" rather than "how far into a
@@ -1213,10 +1248,25 @@ function enterStep(i) {
     if (!$("step-" + STEPS[k][0])) $("steps").appendChild(stepRow(k))
   }
   stepAt = i
+  stepShownAt = performance.now()
   enterSegment(i)
 }
 
-function finishSteps() {
+/**
+ * Let the checklist finish showing itself, then fill the bar.
+ *
+ * The build is done by the time this runs, but the display may still owe the
+ * reader a step or two - the opening book in particular finishes so fast that
+ * without this it would be marked done before it had been drawn. Capped, so a
+ * missed step can never hold the result page hostage.
+ */
+async function finishSteps() {
+  targetStep = STEPS.length - 1
+  const until = performance.now() + MIN_STEP_MS * STEPS.length + 500
+  while (stepAt < targetStep && performance.now() < until) {
+    await new Promise((r) => requestAnimationFrame(r))
+  }
+  await new Promise((r) => setTimeout(r, Math.max(0, MIN_STEP_MS - (performance.now() - stepShownAt))))
   for (let k = 0; k <= stepAt; k++) {
     const li = $("step-" + STEPS[k][0])
     if (li) { li.className = "step done"; li.querySelector(".detail").textContent = "" }
@@ -1265,7 +1315,7 @@ function onProgress(p) {
   const i = STEPS.findIndex((s) => s[0] === p.phase)
   // An unknown phase still deserves its label rather than being dropped.
   if (i === -1) { if (p.label) setNote(p.label); return }
-  if (i > stepAt) enterStep(i)
+  if (i > targetStep) requestStep(i)
   if (i === stepAt) {
     const li = $("step-" + p.phase)
     if (li) li.querySelector(".detail").textContent = detailOf(p.label)
