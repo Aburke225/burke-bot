@@ -14,7 +14,6 @@ import collections
 import glob
 import io
 import json
-import math
 import os
 import sys
 import urllib.request
@@ -278,11 +277,24 @@ def main():
     # performance rating vs the chess.com bots (their scale runs hotter than
     # human ratings, so this is quoted on the site as "bot scale")
     if bot_games:
+        # Solved per opponent, not against their average. Averaging the
+        # opponents and inverting the Elo curve once is only sound when they
+        # are clustered; these bots run 1500-1800, and because expected score
+        # is not linear in opponent rating the shortcut reads high - 1335
+        # against 1310 on the 3.5/30 that produced it. The test is direct: at
+        # 1335 the curve predicts 3.96 points from these 30 games, at 1310 it
+        # predicts 3.51, and 3.5 is what was actually scored.
         n = len(bot_games)
-        avg = sum(e for e, _ in bot_games) / n
-        s = sum(sc for _, sc in bot_games) / n
-        s = min(max(s, 1 / (2 * n)), 1 - 1 / (2 * n))  # keep the log finite
-        stats["bot_scale_strength"] = int(round((avg - 400 * math.log10(1 / s - 1)) / 5) * 5)
+        pts = min(max(sum(sc for _, sc in bot_games), 0.5), n - 0.5)  # finite solve
+        lo, hi = 0.0, 4000.0
+        for _ in range(80):                     # bisection: expected score is
+            mid = (lo + hi) / 2                 # monotone in the rating
+            exp = sum(1 / (1 + 10 ** ((e - mid) / 400)) for e, _ in bot_games)
+            if exp < pts:
+                lo = mid
+            else:
+                hi = mid
+        stats["bot_scale_strength"] = int(round(((lo + hi) / 2) / 5) * 5)
     else:
         stats["bot_scale_strength"] = None
 
