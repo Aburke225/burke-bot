@@ -91,15 +91,18 @@ body {
 }
 .login-btn {
   font: inherit;
-  /* Bigger and bolder so the label carries the same visual weight as the two
+  /* Bigger and heavier so the label carries the same visual weight as the two
      icon buttons beside it, whose strokes are far heavier than 0.85rem/400 was.
+     500, not 600: the page loads IBM Plex Mono at 400 and 500 only, so 600 here
+     was Chrome emboldening the 400 outline itself - 500 is both a step lighter
+     and a weight the typeface actually draws.
      The padding pays for the extra width exactly: the label is monospace, so it
-     costs 5.4rem per em of font-size (9 chars x 0.6 advance) and bold adds
+     costs 5.4rem per em of font-size (9 chars x 0.6 advance) and weight adds
      nothing, which makes the button 2px + 2*pad + 5.4*size wide. Holding that
      at its old 6.39rem + 2px means pad = (6.39 - 5.4*0.95)/2 = 0.63rem, so the
      box is unchanged at every root size - both terms are rem. */
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 500;
   height: 38px;
   padding: 0 0.63rem;
   border-radius: 10px;
