@@ -684,9 +684,29 @@ async function runFits(scored, opts, report, breathe) {
   const fits = []
   const total = HORIZONS.length
   const yieldEvery = yieldEveryFor(N, K)
+    // fitAsync already reports every cross-validation fit it finishes; nothing
+    // was listening, so the step showed three updates across its whole run and
+    // no number beside it. Forwarded, it gives the same kind of count scoring
+    // has - and a far finer signal for anything pacing a progress bar.
+    //
+    // Per horizon that is one fit for each L2 value in each fold, plus the
+    // final fit on all of them. The grid size comes from the first report
+    // rather than a constant here, so overriding l2Grid or folds cannot
+    // quietly make the count wrong.
+    let cvTotal = 0
+    let doneFits = 0
+    const perHorizon = () => (cvTotal || 50) + 1
+    const totalFits = () => HORIZONS.length * perHorizon()
+    const fitLabel = () => `Fitting your style - pass ${doneFits} of ${totalFits()}`
+    const relayFit = (hi) => (pr) => {
+      if (pr.phase === "cv") { cvTotal = pr.total; doneFits = hi * perHorizon() + pr.done }
+      else if (pr.phase === "final") doneFits = hi * perHorizon() + cvTotal
+      else return
+      report("fit", doneFits, totalFits(), fitLabel())
+    }
   for (let hi = 0; hi < HORIZONS.length; hi++) {
     throwIfAborted(opts.signal)
-    report("fit", hi, total, "Fitting your style...")
+      report("fit", doneFits, totalFits(), fitLabel())
     applyHorizon(X, scored.hcols[hi], N, K, D)
     const tFit = nowMs()
     let res
@@ -697,6 +717,12 @@ async function runFits(scored, opts, report, breathe) {
         featureNames: FEATURE_NAMES,
         yieldEvery,
         ...opts.fit,
+          // after the spread, so a caller's own handler is chained rather
+          // than silently replaced
+          onProgress: (pr) => {
+            relayFit(hi)(pr)
+            if (opts.fit && typeof opts.fit.onProgress === "function") opts.fit.onProgress(pr)
+          },
         yield: async () => { throwIfAborted(opts.signal); await breathe() },
       })
     } catch (err) {
@@ -705,7 +731,7 @@ async function runFits(scored, opts, report, breathe) {
     }
     fits.push({ horizon: HORIZONS[hi], ms: Math.round(nowMs() - tFit), ...res })
   }
-  report("fit", total, total, "Fitting your style...")
+    report("fit", totalFits(), totalFits(), fitLabel())
 
   // Out-of-fold where there were enough games to split folds; in-sample is the
   // documented fallback and is FLAGGED, because it is not a fair comparison -

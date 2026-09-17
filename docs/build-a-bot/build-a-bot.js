@@ -1019,7 +1019,11 @@ const OVERRUN_STRETCH = 2
  * from calibration rather than from here, so the shares follow the machine.
  */
 const STEP_MODEL = {
-  download: (n) => 0.5 + n * 0.01,
+  // Both ends are near-instant once the archive scan has cached the games, and
+  // a step that holds for a second while the bar under it does not visibly move
+  // reads as a stall. Half a second of extra share each, so there is something
+  // travelling for the whole time the row is up.
+  download: (n) => 1.0 + n * 0.01,
   probe: () => 2.1,
   score: (n) => n * scoringSecondsPerGame(),
   // The heaviest step after scoring, and for a while the measurements said it
@@ -1031,7 +1035,7 @@ const STEP_MODEL = {
   // for each of three horizons). At about 34 decisions a game that is ~18ms of
   // fitting per decision point.
   fit: (n) => (n * DECISIONS_PER_GAME * 18) / 1000,
-  finish: () => 1.2,
+  finish: () => 1.7,
 }
 
 function scoringSecondsPerGame() {
@@ -1118,9 +1122,12 @@ function enterSegment(i) {
   segIndex = i
   segStart = performance.now()
   paintBar(segments[i].from)
-  stopBar()
-  const frame = () => { tickBar(); barTimer = requestAnimationFrame(frame) }
-  barTimer = requestAnimationFrame(frame)
+  // The frame loop is NOT touched here. It is started once by planBar and runs
+  // until the build ends. Restarting it from here meant restarting it from
+  // inside its own callback - stopBar cancelled an id that had already fired,
+  // the new request was then overwritten by the outer frame's own, and the loop
+  // ended up either doubled or orphaned. The last step was the one that lost
+  // it, so the bar sat still for the whole of the opening book.
 }
 
 function tickBar() {
@@ -1266,7 +1273,16 @@ async function finishSteps() {
   while (stepAt < targetStep && performance.now() < until) {
     await new Promise((r) => requestAnimationFrame(r))
   }
-  await new Promise((r) => setTimeout(r, Math.max(0, MIN_STEP_MS - (performance.now() - stepShownAt))))
+  // Then animate the last segment through a readable second WITH THE THREAD
+  // FREE. The opening book and the stats are synchronous - measured at 1.6s
+  // during which exactly two frames were produced - so nothing could move while
+  // they ran, bar or spinner. Holding afterwards is the only moment that second
+  // is actually animatable, so the segment's clock is restarted here and the
+  // frame loop eases it out properly.
+  const seg = segments[segIndex]
+  if (seg) { seg.secs = MIN_STEP_MS / 1000; segStart = performance.now() }
+  const holdUntil = performance.now() + MIN_STEP_MS
+  while (performance.now() < holdUntil) await new Promise((r) => requestAnimationFrame(r))
   for (let k = 0; k <= stepAt; k++) {
     const li = $("step-" + STEPS[k][0])
     if (li) { li.className = "step done"; li.querySelector(".detail").textContent = "" }
