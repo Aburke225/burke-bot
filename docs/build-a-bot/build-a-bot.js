@@ -82,8 +82,19 @@ function setTheme(light) {
 
 /* --------------------------------------------------------------- sound */
 
-const SPK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>'
-const MUTE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>'
+  // Burke Bot's speaker, to the coordinate. This page had a one-wave version of
+  // it, and the two sit on pages a visitor moves between - a control that is
+  // nearly the same is worse than one that is plainly different.
+  const SPK_BODY = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>'
+  const SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  const SPK = SVG_OPEN + SPK_BODY +
+    '<path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
+  // Muting swaps the WAVES for a small x rather than striking a line across the
+  // speaker: at this size a full diagonal breaks the speaker into unreadable
+  // pieces, and this way the speaker itself never moves between the two states.
+  const MUTE = SVG_OPEN + SPK_BODY +
+    '<line x1="16.2" y1="9.4" x2="21.3" y2="14.6"/><line x1="21.3" y1="9.4" x2="16.2" y2="14.6"/></svg>'
 
 function setMuted(m) {
   state.muted = m
@@ -969,7 +980,15 @@ let stepAt = -1
  * completion is the only thing that fills it.
  */
 const BAR_CEILING = 0.94
-const BAR_ASYMPTOTE = 99.2
+// The hard stop: the bar never shows more than this until the build is actually
+// done, so a full bar always means finished and never means "nearly".
+const BAR_HARD_STOP = 99
+// How long the overrun crawl takes, in multiples of the estimate. The old decay
+// spent itself inside one estimate-length and then sat still at its ceiling,
+// which read as a hang. Stretching it means the bar is always travelling - a
+// build that runs to twice its estimate is at 97.2%, four times at 98.3%, eight
+// times at 98.9% - approaching 99 without ever arriving there.
+const OVERRUN_STRETCH = 2
 
 let barTimer = null
 let barFrom = 0        // width the current step started at (always 0 today)
@@ -1031,12 +1050,13 @@ function startBar(seconds, from = 0) {
       paintBar(barFrom + eased * (BAR_CEILING * 100 - barFrom))
     } else {
       // Past the estimate. An estimate is a guess and some machines are slow,
-      // so rather than freezing at the ceiling - which reads as a hang - it
-      // keeps closing on 99.2% by halves. Always moving, never arriving; only
-      // the step actually ending fills it.
+      // so rather than freezing at the ceiling - which reads as a hang - the
+      // bar keeps closing on the hard stop, just far more slowly than it was
+      // moving before. Always travelling, never arriving; only the build
+      // actually finishing fills it.
       const over = t - 1
       const ceil = Math.max(BAR_CEILING * 100, barFrom)
-      paintBar(BAR_ASYMPTOTE - (BAR_ASYMPTOTE - ceil) * Math.exp(-over))
+      paintBar(BAR_HARD_STOP - (BAR_HARD_STOP - ceil) * Math.exp(-over / OVERRUN_STRETCH))
     }
   }, 50)
 }
