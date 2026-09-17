@@ -150,7 +150,6 @@ const engine = (() => {
 // the bar is Stockfish's own score for the position and nothing else.
 const evalEngine = (() => {
   let worker = null, ready = null, onDone = null, score = null
-  let queue = Promise.resolve()
   function boot() {
     if (ready) return ready
     worker = new Worker("vendor/stockfish/stockfish-18-lite-single.js")
@@ -180,18 +179,44 @@ const evalEngine = (() => {
     worker.postMessage("uci")
     return ready
   }
+  // LATEST WINS. This used to be a plain FIFO - every call appended a full
+  // depth-18 search and all of them ran to completion in order. Ten arrow
+  // presses meant ten searches, and the tenth (the only one whose answer is
+  // still on screen) waited behind nine whose results updateEval was going to
+  // throw away anyway. Now at most one search runs and at most one waits: a
+  // new request displaces the waiting one, which resolves null so its caller
+  // is never left hanging. A burst of presses therefore costs the search
+  // already in flight plus one, instead of one per press.
+  function launch(fen) {
+    return new Promise(res => {
+      score = null
+      onDone = res
+      worker.postMessage("position fen " + fen)
+      worker.postMessage("go depth " + EVAL_DEPTH)
+    })
+  }
+  let busy = false
+  let waiting = null              // { fen, resolve } - the newest request only
+  async function pump() {
+    if (busy) return              // the running pump picks up `waiting` itself
+    busy = true
+    try {
+      while (waiting) {
+        const { fen, resolve } = waiting
+        waiting = null            // taken: a request arriving now queues behind
+        resolve(await launch(fen))
+      }
+    } finally {
+      busy = false
+    }
+  }
   return {
-    async score(fen) {
-      await boot()
-      const run = () => new Promise(res => {
-        score = null
-        onDone = res
-        worker.postMessage("position fen " + fen)
-        worker.postMessage("go depth " + EVAL_DEPTH)
-      })
-      const p = queue.then(run)
-      queue = p.then(() => {}, () => {})
-      return p
+    score(fen) {
+      return boot().then(() => new Promise(res => {
+        if (waiting) waiting.resolve(null)   // displaced, and updateEval drops null
+        waiting = { fen, resolve: res }
+        pump()
+      }))
     },
   }
 })()
@@ -686,6 +711,8 @@ function browseTo(k) {
   if (!n || !boardRef) return
   k = Math.max(0, Math.min(n, k))
   const prev = viewPly === -1 ? n : viewPly
+  const moved = k !== prev        // holding Left at ply 0, or Right at the live
+                                  // position, clamps to where we already are
   viewPly = k === n ? -1 : k
   const live = viewPly === -1
   // a single step replays that move's sound; a jump gets a plain tap
@@ -732,7 +759,10 @@ function browseTo(k) {
       if (statusByPly[p]) { setStatusRaw(statusByPly[p].kind, statusByPly[p].label, statusByPly[p].line); break }
     }
   }
-  updateEval(fen)
+  // Only when the position actually changed. The rest of this function is
+  // cheap re-rendering, but the eval is a depth-18 search, and re-searching
+  // the square we never left is the one cost worth refusing outright.
+  if (moved) updateEval(fen)
 }
 
 function browseKey(e) {
@@ -752,6 +782,18 @@ function browseKey(e) {
 // ---------- the eval bar (White's winning chances, chess.com style) ----------
 
 let evalToken = 0
+
+// Paint the bar from something OTHER than a search - a mate, a draw, a reset.
+// It has to invalidate the in-flight search as well as draw, or a depth-18
+// reply that was already on its way when the game ended would come back, pass
+// updateEval's token check (nothing had bumped it) and quietly overwrite the
+// mate bar with a position score. The token is the only thing that decides
+// which answer is allowed to reach the bar, so anything that paints directly
+// must claim it.
+function setEvalBar(cpWhite) {
+  evalToken++
+  renderEvalBar(cpWhite)
+}
 
 function renderEvalBar(cpWhite) {
   const bar = document.getElementById("eval-bar")
@@ -1601,8 +1643,8 @@ function finishAuto() {
 
 function finish(result, line) {
   gameActive = false
-  if (chess.isCheckmate()) renderEvalBar(chess.turn() === "w" ? -10000 : 10000)
-  else if (result === "d") renderEvalBar(0)
+  if (chess.isCheckmate()) setEvalBar(chess.turn() === "w" ? -10000 : 10000)
+  else if (result === "d") setEvalBar(0)
   sfx.end()
   setStatus("over", "game over", line)
   boardRef.disableMoveInput()
@@ -1648,7 +1690,7 @@ function playAgain() {
   setControls(false)
   boardRef.setOrientation(COLOR.white, false)
   boardRef.setPosition(chess.fen(), false)
-  renderEvalBar(0)
+  setEvalBar(0)
   showEvalBar(false)
   setStatus("book", "new game", "Pick your color to start.")
   document.getElementById("confirm").hidden = true
