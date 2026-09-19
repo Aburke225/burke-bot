@@ -124,17 +124,29 @@ const EVAL_DEPTH = 18
 // of ~10cp; p90 is also the least reliable part of the target, estimated off
 // three or four observations. Result, against his daily p50/p75/p90:
 //
-//   phase       k     bot            him (daily)      n    80% range
-//   <0.15     1.8     6/37/81        6/38/125        71    1.40-2.25
-//   0.15-0.40 2.1     1/42/93        0/68/141       101    1.47-2.50
-//   0.40-0.60 1.7     14/66/131      15/59/167       35    1.17-2.52
-//   >=0.60    1.8     6/53/125       6/43/253        33    1.52-2.57
+//   phase     fitted  shipped  bot            him (daily)      n    80% range
+//   <0.15      1.8      2.0     6/37/81        6/38/125        71    1.40-2.25
+//   0.15-0.40  2.1      2.3     1/42/93        0/68/141       101    1.47-2.50
+//   0.40-0.60  1.7      1.9     14/66/131      15/59/167       35    1.17-2.52
+//   >=0.60     1.8      2.0     6/53/125       6/43/253        33    1.52-2.57
+//
+// SHIPPED IS FITTED PLUS 0.2, by choice rather than by measurement: the bot
+// was still losing games it should not, so every phase is pulled toward the
+// accurate end. The bot/him columns describe the FITTED values - they are the
+// evidence the fit came from, not a description of what now plays. What the
+// bump does not do is leave the data: every shipped value is still inside its
+// own 80% range above, so this is the stronger reading of the same
+// distribution rather than a number the games never supported. Expect it to
+// undershoot his 90th percentile by more than the table shows, because that
+// is the tail amplification suppresses first.
 //
 // It matches his median and 75th percentile and UNDERSHOOTS his 90th in every
 // phase: amplifying perception suppresses exactly the rare disasters, so the
 // bot is more consistent than unhurried him rather than identical to him.
-// Flat k=1.8 measures almost the same (drift 0.0127 against 0.0137) - only the
-// midgame really wants more - so do not read the four numbers as precise.
+// At the fitted values a flat k=1.8 measured almost the same (drift 0.0127
+// against 0.0137) - only the midgame really wants more - so do not read the
+// four numbers as precise, and do not read the 0.2 gaps between them as
+// meaningful either.
 // Whole-game drift 0.0137, captures 29.0% against his 27.4%, checks 11.1%
 // against 10.3%. Largest single drift is engine_rank (+0.300), which is one of
 // the five being amplified on purpose.
@@ -147,7 +159,7 @@ const EVAL_DEPTH = 18
 // k by phase (1 - pieceCount/32), fitted to his DAILY error distribution -
 // see the calibration note below. Three of the four are indistinguishable from
 // each other; the midgame is the one that genuinely wants more.
-const PERCEPTION_K = [[0.15, 1.8], [0.40, 2.1], [0.60, 1.7], [Infinity, 1.8]]
+const PERCEPTION_K = [[0.15, 2.0], [0.40, 2.3], [0.60, 1.9], [Infinity, 2.0]]
 // by NAME, not index: the contract is append-only so these should never move,
 // but a rename must fail loudly rather than silently amplify a neighbour
 const PERCEPTION_FEATURES = ["horizon_loss_log", "horizon_loss_log_quiet",
