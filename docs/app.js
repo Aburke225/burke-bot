@@ -811,7 +811,7 @@ function openingRemark(name, family) {
   // you can love an opening and still be bad at it
   if (family === favoriteFamily && s.n >= 8) return "The " + name + "! My favorite — I've won " + pct + "% of my games with it."
   if (s.n >= 20) return "The " + name + "! One of my favorites — I've won " + pct + "% of my games with it."
-  if (s.n >= 8 && pct <= 40) return "The " + name + "... I've only won " + pct + "% of my games with it. It's time to bump those numbers up!"
+  if (s.n >= 8 && pct <= 40) return "The " + name + "... I've only won " + pct + "% of my games with it — that changes today!"
   if (s.n >= 4) return "The " + name + " — I've won " + pct + "% of my games with this one."
   return "The " + name + " — I've dabbled in it."
 }
