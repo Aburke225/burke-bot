@@ -1,10 +1,10 @@
 {
-  "as_black": 189,
-  "as_white": 173,
-  "book_positions": 4324,
+  "as_black": 190,
+  "as_white": 175,
+  "book_positions": 4356,
   "bot_scale_strength": 1310,
   "draws": 14,
-  "games": 362,
+  "games": 365,
   "last_game": "2026-01-10",
   "losses": 175,
   "manual_games": 30,
@@ -126,14 +126,14 @@
     "King's Knight Opening": {
       "d": 3,
       "l": 45,
-      "n": 100,
-      "w": 52
+      "n": 101,
+      "w": 53
     },
     "King's Pawn Game": {
       "d": 13,
       "l": 126,
-      "n": 278,
-      "w": 139
+      "n": 281,
+      "w": 142
     },
     "Modern Defense": {
       "d": 0,
@@ -156,8 +156,8 @@
     "Owen Defense": {
       "d": 1,
       "l": 13,
-      "n": 26,
-      "w": 12
+      "n": 27,
+      "w": 13
     },
     "Petrov's Defense": {
       "d": 0,
@@ -240,14 +240,14 @@
     "Scotch Game": {
       "d": 2,
       "l": 20,
-      "n": 44,
-      "w": 22
+      "n": 45,
+      "w": 23
     },
     "Sicilian Defense": {
       "d": 4,
       "l": 31,
-      "n": 70,
-      "w": 35
+      "n": 71,
+      "w": 36
     },
     "Slav Defense": {
       "d": 0,
@@ -295,7 +295,7 @@
   "openings_black": [
     [
       "Sicilian Defense",
-      58
+      59
     ],
     [
       "Owen Defense",
@@ -321,7 +321,7 @@
   "openings_white": [
     [
       "Scotch Game",
-      40
+      41
     ],
     [
       "Scandinavian Defense",
@@ -344,7 +344,7 @@
       11
     ]
   ],
-  "site_games": 5,
+  "site_games": 8,
   "username": "Burkeley",
-  "wins": 173
+  "wins": 176
 }
